@@ -1,0 +1,31 @@
+{
+  "name": "northrook/cache",
+  "description": "PHP Memoization and native PHP data storage.",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Northrook\\Cache\\": ""
+    }
+  },
+  "authors": [
+    {
+      "name": "Martin",
+      "email": "mn@northrook.com"
+    }
+  ],
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "require": {
+    "php": ">=8.2",
+    "ext-mbstring": "*",
+    "northrook/logger": "dev-main",
+    "symfony/filesystem": "@stable",
+    "symfony/cache": "@stable",
+    "symfony/var-exporter": "@stable",
+    "symfony/stopwatch": "@stable"
+  },
+  "require-dev": {
+    "northrook/dev-env": "dev-main"
+  }
+}
