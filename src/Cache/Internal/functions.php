@@ -1,24 +1,30 @@
 <?php
 
+declare( strict_types = 1 );
+
 use Northrook\Cache;
+use Northrook\Cache\Persistence;
 use Northrook\CacheManager;
 use Symfony\Contracts\Cache\ItemInterface;
 
 function Cached(
-    callable    $callback,
-    array       $arguments = [],
-    false | int $ttl = false,
+    callable $callback,
+    array    $arguments = [],
+    ?int     $persistence = null,
 ) : mixed {
+    $cacheKey = Cache::key( $arguments );
+    CacheManager::status($cacheKey );
+    return CacheManager::memoAdapter( $persistence,$cacheKey )->get(
+        key      : $cacheKey,
+        callback : static function ( ItemInterface $memo) use (
+            $callback, $arguments, $persistence, $cacheKey
+        ) : mixed {
+            $memo->expiresAfter( $persistence );
+            $value = $callback( ...$arguments );
 
-    return CacheManager::memoAdapter( $ttl )->get(
-        Cache::key( $arguments ),
-        static function ( ItemInterface $memo ) use ( $callback, $arguments, $ttl ) : mixed {
+            CacheManager::status( $cacheKey, true );
 
-            if ( $ttl !== false ) {
-                $memo->expiresAfter( $ttl );
-            }
-
-            return $callback( ...$arguments );
+            return $value;
         },
     );
 }

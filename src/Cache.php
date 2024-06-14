@@ -6,6 +6,7 @@ class Cache
 {
     private static bool $initialized = false;
 
+    public const EPHEMEREAL = false;
     public const TTL_FOREVER = 0;
     public const TTL_MINUTE  = 60;
     public const TTL_HOUR    = 3600;

@@ -3,6 +3,7 @@
 namespace Northrook;
 
 use Northrook\Cache\Internal\Timestamp;
+use Northrook\Cache\Persistence;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Cache\Adapter\AdapterInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -14,23 +15,20 @@ final class CacheManager
 {
 
     private static CacheManager      $instance;
+    private static array             $cacheStatus = [];
     private readonly bool            $usingSystemCacheDirectory;
     private readonly LoggerInterface $logger;
-
-
     /**
      * @var array<string, int|bool|string>
      */
     private readonly array $settings;
-
     /**
      * @var array<string, AdapterInterface|class-string>
      */
-    private array $adapterPool = [
+    private array          $adapterPool = [
         'ephemeralMemoCache'  => ArrayAdapter::class,
         'persistentMemoCache' => PhpFilesAdapter::class,
     ];
-
     public readonly string $cacheDirectory;
 
     /**
@@ -65,9 +63,24 @@ final class CacheManager
         CacheManager::$instance = $this;
     }
 
-    public static function memoAdapter( bool | int $persistence ) : AdapterInterface {
+    public static function status( string $namespace, bool $regenerated = false ) : void {
 
-        $namespace = $persistence !== false ? 'persistentMemoCache' : 'ephemeralMemoCache';
+        if ( $regenerated ) {
+            CacheManager::$cacheStatus[ $namespace ][ 'hit' ] = 0;
+            return;
+        }
+
+        CacheManager::$cacheStatus[ $namespace ][ 'hit' ] ??= 0;
+        CacheManager::$cacheStatus[ $namespace ][ 'hit' ]++;
+    }
+
+    public static function getCacheStatus() : array {
+        return CacheManager::$cacheStatus;
+    }
+
+    public static function memoAdapter( ?int $ttl, ?string $cacheKey = null ) : AdapterInterface {
+
+        $namespace = $ttl === null ? 'ephemeralMemoCache' : 'persistentMemoCache';
 
         return CacheManager::getAdapter( $namespace );
     }
@@ -104,14 +117,14 @@ final class CacheManager
         $data = [];
 
         foreach ( $this->activeAdapters() as $adapter ) {
-            $data[ ] = $adapter->getItems();
+            $data[] = $adapter->getItems();
         }
 
         return $data;
     }
 
     public function purgeAll() : void {
-        foreach ( $this->activeAdapters()  as $adapter ) {
+        foreach ( $this->activeAdapters() as $adapter ) {
             $adapter->clear();
         }
     }
