@@ -5,7 +5,7 @@
   "license": "MIT",
   "autoload": {
     "psr-4": {
-      "Northrook\\Cache\\": ""
+      "Northrook\\": "src/"
     }
   },
   "authors": [
@@ -18,12 +18,11 @@
   "prefer-stable": true,
   "require": {
     "php": ">=8.2",
+    "psr/log": "^1|^2|^3",
     "ext-mbstring": "*",
-    "northrook/logger": "dev-main",
-    "symfony/filesystem": "@stable",
     "symfony/cache": "@stable",
-    "symfony/var-exporter": "@stable",
-    "symfony/stopwatch": "@stable"
+    "symfony/filesystem": "@stable",
+    "symfony/var-exporter": "@stable"
   },
   "require-dev": {
     "northrook/dev-env": "dev-main"
