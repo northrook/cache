@@ -101,23 +101,28 @@ final class CacheManager
         return $this;
     }
 
-    public function getAl() : array {
+    public function getAll() : array {
 
         $data = [];
 
-        foreach ( $this->adapterPool as $adapter ) {
-
-            $data[ $adapter::class ] = $adapter->getItems();
+        foreach ( $this->activeAdapters() as $adapter ) {
+            $data[ $adapter->getNamespace() ] = $adapter->getItems();
         }
 
         return $data;
     }
 
     public function purgeAll() : void {
-
-        foreach ( $this->adapterPool as $adapter ) {
+        foreach ( $this->activeAdapters()  as $adapter ) {
             $adapter->clear();
         }
+    }
+
+    private function activeAdapters() : array {
+        return array_filter(
+            $this->adapterPool,
+            static fn ( $adapter ) : bool => $adapter instanceof AdapterInterface,
+        );
     }
 
     private function backupAdapter( string $namespace, ?string $backupAdapter = null ) : AdapterInterface {
