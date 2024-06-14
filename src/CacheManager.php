@@ -86,7 +86,7 @@ final class CacheManager
     }
 
     private static function getInstance() : CacheManager {
-        return CacheManager::$instance;
+        return CacheManager::$instance ??= new CacheManager();
     }
 
     public static function getAdapter( string $namespace ) : ?AdapterInterface {
