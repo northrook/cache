@@ -13,18 +13,21 @@ function Cached(
     ?int     $persistence = null,
 ) : mixed {
     $cacheKey = Cache::key( $arguments );
-    CacheManager::status($cacheKey );
-    return CacheManager::memoAdapter( $persistence,$cacheKey )->get(
+    $cached = CacheManager::memoAdapter( $persistence )->get(
         key      : $cacheKey,
-        callback : static function ( ItemInterface $memo) use (
-            $callback, $arguments, $persistence, $cacheKey
+        callback : static function ( ItemInterface $memo ) use (
+            $callback, $arguments, $persistence,
         ) : mixed {
             $memo->expiresAfter( $persistence );
+
             $value = $callback( ...$arguments );
 
-            CacheManager::status( $cacheKey, true );
+            CacheManager::status( $memo->getKey(), true );
 
             return $value;
         },
     );
+
+    CacheManager::status( $cacheKey );
+    return $cached;
 }

@@ -66,7 +66,7 @@ final class CacheManager
     public static function status( string $namespace, bool $regenerated = false ) : void {
 
         if ( $regenerated ) {
-            CacheManager::$cacheStatus[ $namespace ][ 'hit' ] = 0;
+            CacheManager::$cacheStatus[ $namespace ][ 'hit' ] = -1;
             return;
         }
 
