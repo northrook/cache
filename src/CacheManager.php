@@ -10,6 +10,7 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\Adapter\PhpFilesAdapter;
 use Symfony\Component\Cache\Exception\CacheException;
+use Symfony\Component\ErrorHandler\Debug;
 
 final class CacheManager
 {
@@ -89,11 +90,17 @@ final class CacheManager
         return CacheManager::$instance ??= new CacheManager();
     }
 
-    public static function getAdapter( string $namespace ) : ?AdapterInterface {
+    /**
+     * @param string       $namespace
+     * @param null|class-string<AdapterInterface>  $adapter
+     *
+     * @return null|AdapterInterface
+     */
+    public static function getAdapter( string $namespace, ?string $adapter = null ) : ?AdapterInterface {
 
         $cache = CacheManager::getInstance();
 
-        $adapter = $cache->adapterPool[ $namespace ] ?? null;
+        $adapter ??= $cache->adapterPool[ $namespace ] ?? null;
 
         if ( $adapter instanceof AdapterInterface ) {
             return $adapter;
