@@ -57,8 +57,6 @@ final class CacheManager
 
         new Cache( $settings );
 
-        require 'Cache/Internal/functions.php';
-
         $this->cacheDirectory = $this->setCacheDirectory( $cacheDirectory, $subDirectory );
 
         // TODO : Integrate Northrook/Logger as fallback
@@ -106,7 +104,7 @@ final class CacheManager
         $data = [];
 
         foreach ( $this->activeAdapters() as $adapter ) {
-            $data[ $adapter->getNamespace() ] = $adapter->getItems();
+            $data[ ] = $adapter->getItems();
         }
 
         return $data;
