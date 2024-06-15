@@ -8,7 +8,7 @@
       "Northrook\\": "src/"
     },
     "files": [
-      "src/Cache/Internal/functions.php"
+      "src/Cache/functions.php"
     ]
   },
   "authors": [
