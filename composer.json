@@ -24,7 +24,8 @@
     "psr/log": "^1|^2|^3",
     "symfony/cache": "@stable",
     "symfony/filesystem": "@stable",
-    "symfony/var-exporter": "@stable"
+    "symfony/var-exporter": "@stable",
+    "northrook/core": "dev-main"
   },
   "require-dev": {
     "northrook/dev-env": "dev-main"

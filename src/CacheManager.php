@@ -13,21 +13,6 @@ use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\Adapter\PhpFilesAdapter;
 use Symfony\Component\Cache\Exception\CacheException;
 
-/**
- * @param string  $path
- *
- * @return string
- *
- * @internal
- */
-function normalizeRealPath( string $path ) : string {
-    $normalize = str_replace( [ '\\', '/' ], DIRECTORY_SEPARATOR, $path );
-    $exploded  = explode( DIRECTORY_SEPARATOR, $normalize );
-    $path      = implode( DIRECTORY_SEPARATOR, array_filter( $exploded ) );
-
-    return ( realpath( $path ) ?: $path ) . DIRECTORY_SEPARATOR;
-}
-
 final class CacheManager
 {
     use SingletonClass;
