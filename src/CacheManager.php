@@ -1,66 +1,100 @@
 <?php
 
+declare( strict_types = 1 );
+
 namespace Northrook;
 
-use Northrook\Cache\Internal\Timestamp;
-use Northrook\Cache\Persistence;
+use Northrook\Core\Trait\SingletonClass;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\AdapterInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\Adapter\PhpFilesAdapter;
 use Symfony\Component\Cache\Exception\CacheException;
-use Symfony\Component\ErrorHandler\Debug;
+
+/**
+ * @param string  $path
+ *
+ * @return string
+ *
+ * @internal
+ */
+function normalizeRealPath( string $path ) : string {
+    $normalize = str_replace( [ '\\', '/' ], DIRECTORY_SEPARATOR, $path );
+    $exploded  = explode( DIRECTORY_SEPARATOR, $normalize );
+    $path      = implode( DIRECTORY_SEPARATOR, array_filter( $exploded ) );
+
+    return ( realpath( $path ) ?: $path ) . DIRECTORY_SEPARATOR;
+}
 
 final class CacheManager
 {
+    use SingletonClass;
 
-    private static CacheManager      $instance;
+    public const SETTINGS = [
+        'ttl'          => Cache::HOUR_4,
+        'ttl.memo'     => Cache::MINUTE,
+        'ttl.manifest' => Cache::FOREVER,
+    ];
+
     private static array             $cacheStatus = [];
-    private readonly bool            $usingSystemCacheDirectory;
+    private readonly array           $settings;
     private readonly LoggerInterface $logger;
-    /**
-     * @var array<string, int|bool|string>
-     */
-    private readonly array $settings;
+
     /**
      * @var array<string, AdapterInterface|class-string>
      */
-    private array          $adapterPool = [
+    private array $adapterPool = [
         'ephemeralMemoCache'  => ArrayAdapter::class,
         'persistentMemoCache' => PhpFilesAdapter::class,
     ];
+
     public readonly string $cacheDirectory;
+    public readonly string $assetDirectory;
+    public readonly string $manifestDirectory;
 
     /**
      * - If you choose to provide a cache directory, the path **must** be valid and writable.
      *
-     *
-     * @param null|string           $cacheDirectory
-     * @param null|string           $subDirectory
-     * @param array                 $settings  Dot-notated settings
-     * @param null|LoggerInterface  $logger
+     * @param ?string                         $cacheDirectory
+     * @param ?string                         $assetDirectory
+     * @param ?string                         $manifestDirectory
+     * @param array<string, int|bool|string>  $settings  Dot-notated settings
+     * @param ?LoggerInterface                $logger
      */
     public function __construct(
         ?string          $cacheDirectory = null,
-        ?string          $subDirectory = null,
+        ?string          $assetDirectory = null,
+        ?string          $manifestDirectory = null,
         array            $settings = [],
         ?LoggerInterface $logger = null,
     ) {
-        if ( isset( CacheManager::$instance ) ) {
-            throw new \LogicException(
-                'The ' . CacheManager::class . ' has already been instantiated. 
-                It cannot be re-instantiated.',
-            );
-        }
-
-        new Cache( $settings );
-
-        $this->cacheDirectory = $this->setCacheDirectory( $cacheDirectory, $subDirectory );
+        $this->instantiationCheck();
 
         // TODO : Integrate Northrook/Logger as fallback
-        $this->logger = $logger ?? new \Psr\Log\NullLogger();
+        $this->logger = $logger ?? new NullLogger();
 
+        $this->settings = array_merge( CacheManager::SETTINGS, $settings );
+
+        // Set required directories
+        [
+            $this->cacheDirectory,
+            $this->assetDirectory,
+            $this->manifestDirectory,
+        ] = array_map(
+            'Northrook\normalizeRealPath',
+            [
+                // Use system cache directory as a fallback, using a hashed subdirectory
+                $cacheDirectory ??= sys_get_temp_dir() . '/' . hash( 'xxh3', __DIR__ ),
+                // Asset cache directory
+                $assetDirectory ??= $cacheDirectory . '/' . 'assets',
+                // Manifest cache directory
+                $manifestDirectory ?? $assetDirectory,
+            ],
+        );
+
+        // Start CacheManager instance
         CacheManager::$instance = $this;
     }
 
@@ -75,23 +109,33 @@ final class CacheManager
         CacheManager::$cacheStatus[ $namespace ][ 'hit' ]++;
     }
 
+    public static function get() : CacheManager {
+        return CacheManager::$instance;
+    }
+
     public static function getCacheStatus() : array {
         return CacheManager::$cacheStatus;
     }
 
-    public static function memoAdapter( ?int $ttl, ?string $cacheKey = null ) : AdapterInterface {
+    public function addPool(
+        string           $namespace,
+        AdapterInterface $adapter,
+    ) : CacheManager {
+
+        $this->adapterPool[ $namespace ] = $adapter;
+
+        return $this;
+    }
+
+    public static function memoAdapter( ?int $ttl ) : AdapterInterface {
 
         $namespace = $ttl === null ? 'ephemeralMemoCache' : 'persistentMemoCache';
 
         return CacheManager::getAdapter( $namespace );
     }
 
-    private static function getInstance() : CacheManager {
-        return CacheManager::$instance ??= new CacheManager();
-    }
-
     /**
-     * @param string       $namespace
+     * @param string                               $namespace
      * @param null|class-string<AdapterInterface>  $adapter
      *
      * @return null|AdapterInterface
@@ -109,14 +153,51 @@ final class CacheManager
         return $cache->adapterPool[ $namespace ] = $cache->backupAdapter( $namespace, $adapter );
     }
 
-    public function addPool(
-        string           $namespace,
-        AdapterInterface $adapter,
-    ) : CacheManager {
+    private function backupAdapter(
+        string        $namespace,
+        null | string $backupAdapter = null,
+    ) : AdapterInterface {
 
-        $this->adapterPool[ $namespace ] = $adapter;
+        if ( $backupAdapter === ArrayAdapter::class ) {
+            return new ArrayAdapter();
+        }
 
-        return $this;
+        try {
+            $adapter = $this->fallbackAdapter(
+                $backupAdapter,
+                $namespace,
+                $this->setting( 'ttl' ),
+                $this->cacheDirectory,
+            );
+        }
+        catch ( CacheException ) {
+            $adapter = new FilesystemAdapter(
+                $namespace,
+                $this->setting( 'ttl' ),
+                $this->cacheDirectory,
+            );
+        }
+
+        $this->logger->error(
+            message : "Using backup cache adapter for {namespace}. Assigned {adapter} as fallback.",
+            context : [
+                          'namespace' => $namespace,
+                          'adapter'   => $adapter::class,
+                      ],
+        );
+
+        return $adapter;
+    }
+
+    /**
+     * @param class-string  $className
+     * @param               $arguments
+     *
+     * @return AdapterInterface
+     * @throws CacheException
+     */
+    private function fallbackAdapter( string $className, ...$arguments ) : AdapterInterface {
+        return new ( class_exists( $className ) ? $className : PhpFilesAdapter::class )( ...$arguments );
     }
 
     public function getAll() : array {
@@ -143,74 +224,15 @@ final class CacheManager
         );
     }
 
-    private function backupAdapter( string $namespace, ?string $backupAdapter = null ) : AdapterInterface {
-
-        if ( $backupAdapter === ArrayAdapter::class ) {
-            return new ArrayAdapter();
-        }
-
-        if ( !$backupAdapter || !class_exists( $backupAdapter ) ) {
-            $backupAdapter = PhpFilesAdapter::class;
-        }
-
-        try {
-            $adapter = new $backupAdapter(
-                $namespace,
-                Cache::setting( 'ttl' ),
-                $this->cacheDirectory,
-            );
-        }
-        catch ( CacheException $e ) {
-            $adapter = new FilesystemAdapter(
-                $namespace,
-                Cache::setting( 'ttl' ),
-                $this->cacheDirectory,
-            );
-        }
-
-        $this->logger->error(
-            message : "Using backup cache adapter for {namespace}. Assigned {adapter} as fallback.",
-            context : [
-                          'namespace' => $namespace,
-                          'adapter'   => $adapter::class,
-                      ],
-        );
-
-        return $adapter;
-    }
-
     /**
-     * Assign a cache directory for the cache manager.
+     * @param ?string  $get  = ... static::SETTINGS
      *
-     * - Prefers using the provided $cacheDirectory
-     * - Will fall back to the system temp directory.
-     * - If the $systemCacheDirectory is used, a $subDirectory is required
-     *   - If no $subDirectory is provided, a hash of the __DIR__ is used
-     * - A $subDirectory will be created in the provided $cacheDirectory
-     *
-     * @param null|string  $cacheDirectory
-     * @param null|string  $subDirectory
-     *
-     * @return string
+     * @return array| bool|int|string|null
      */
-    private function setCacheDirectory(
-        ?string $cacheDirectory = null,
-        ?string $subDirectory = null,
-    ) : string {
-
-        $this->usingSystemCacheDirectory = $cacheDirectory === null;
-
-        $cacheDirectory = $cacheDirectory ?? sys_get_temp_dir();
-
-        if ( $this->usingSystemCacheDirectory ) {
-            $subDirectory ??= hash( 'xxh3', __DIR__ );
-        }
-
-        if ( $subDirectory ) {
-            $cacheDirectory .= DIRECTORY_SEPARATOR . $subDirectory;
-        }
-
-        return realpath( $cacheDirectory ) ?: $cacheDirectory;
+    private function setting(
+        ?string $get,
+    ) : array | bool | int | string | null {
+        return $get ? $this->settings[ $get ] ?? null : $this->settings;
     }
 
 }

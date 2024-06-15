@@ -22,7 +22,6 @@
   "require": {
     "php": ">=8.2",
     "psr/log": "^1|^2|^3",
-    "ext-mbstring": "*",
     "symfony/cache": "@stable",
     "symfony/filesystem": "@stable",
     "symfony/var-exporter": "@stable"

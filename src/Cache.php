@@ -2,53 +2,28 @@
 
 namespace Northrook;
 
-class Cache
+use Northrook\Core\Trait\StaticClass;
+
+/**
+ * @author Martin Nielsen <mn@northrook.com>
+ */
+final  class Cache
 {
+    use StaticClass;
+
     private static bool $initialized = false;
 
-    public const EPHEMEREAL = false;
-    public const TTL_FOREVER = 0;
-    public const TTL_MINUTE  = 60;
-    public const TTL_HOUR    = 3600;
-    public const TTL_HOUR_4  = 14400;
-    public const TTL_HOUR_8  = 28800;
-    public const TTL_HOUR_12 = 43200;
-    public const TTL_DAY     = 86400;
-    public const TTL_WEEK    = 604800;
-    public const TTL_MONTH   = 2592000;
-    public const TTL_YEAR    = 31536000;
-
-
-    private static array $settings = [
-        'ttl'          => Cache::TTL_HOUR_4,
-        'ttl.memo'     => Cache::TTL_MINUTE,
-        'ttl.manifest' => Cache::TTL_FOREVER,
-    ];
-
-    public function __construct( array $settings = []) {
-        if ( Cache::$initialized ) {
-            throw new \LogicException(
-                'The ' . Cache::class . ' has already been instantiated. 
-                It cannot be re-instantiated.',
-            );
-        }
-
-        Cache::$settings = array_merge( Cache::$settings, $settings );
-        Cache::$initialized = true;
-    }
-
-    /**
-     * @param string  $get = ['ttl', 'ttl.memo', 'ttl.manifest']
-     *
-     * @return bool|int|string
-     */
-    public static function setting( string $get)  : bool | int | string {
-        return Cache::$settings[ $get ] ?? false;
-    }
-
-    // public static function memoize( callable $callback, array $arguments = [], false | int $persistFor = false ) : mixed {
-    //
-    // }
+    public const EPHEMERAL = null;
+    public const FOREVER   = 0;
+    public const MINUTE    = 60;
+    public const HOUR      = 3600;
+    public const HOUR_4    = 14400;
+    public const HOUR_8    = 28800;
+    public const HOUR_12   = 43200;
+    public const DAY       = 86400;
+    public const WEEK      = 604800;
+    public const MONTH     = 2592000;
+    public const YEAR      = 31536000;
 
     /**
      * Generate a unique key from provided arguments.
