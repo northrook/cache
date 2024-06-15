@@ -68,13 +68,16 @@ final class CacheManager
         ?LoggerInterface $logger = null,
     ) {
         $this->instantiationCheck();
-
-        $this->logger = $logger ?? new NullLogger();
-
+        $this->logger   = $logger ?? new NullLogger();
         $this->settings = array_merge( CacheManager::SETTINGS, $settings );
 
-        $this->cacheDirectory    = $cacheDirectory ??= sys_get_temp_dir() . '/' . hash( 'xxh3', __DIR__ );
-        $this->manifestDirectory = $manifestDirectory ?? $cacheDirectory . '/' . 'manifest';
+        // Parse directories, using system temp dir if none is provided
+        $cacheDirectory    ??= sys_get_temp_dir() . '/' . hash( 'xxh3', __DIR__ );
+        $manifestDirectory ??= $cacheDirectory . '/' . 'manifest';
+
+        // Set cache directories
+        $this->cacheDirectory = normalizeRealPath( $cacheDirectory );;
+        $this->manifestDirectory = normalizeRealPath( $manifestDirectory );
 
         // Start CacheManager instance
         CacheManager::$instance = $this;
