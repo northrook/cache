@@ -51,51 +51,36 @@ final class CacheManager
     ];
 
     public readonly string $cacheDirectory;
-    public readonly string $assetDirectory;
     public readonly string $manifestDirectory;
 
     /**
      * - If you choose to provide a cache directory, the path **must** be valid and writable.
      *
      * @param ?string                         $cacheDirectory
-     * @param ?string                         $assetDirectory
      * @param ?string                         $manifestDirectory
      * @param array<string, int|bool|string>  $settings  Dot-notated settings
      * @param ?LoggerInterface                $logger
      */
     public function __construct(
         ?string          $cacheDirectory = null,
-        ?string          $assetDirectory = null,
         ?string          $manifestDirectory = null,
         array            $settings = [],
         ?LoggerInterface $logger = null,
     ) {
         $this->instantiationCheck();
 
-        // TODO : Integrate Northrook/Logger as fallback
         $this->logger = $logger ?? new NullLogger();
 
         $this->settings = array_merge( CacheManager::SETTINGS, $settings );
 
-        // Set required directories
-        [
-            $this->cacheDirectory,
-            $this->assetDirectory,
-            $this->manifestDirectory,
-        ] = array_map(
-            'Northrook\normalizeRealPath',
-            [
-                // Use system cache directory as a fallback, using a hashed subdirectory
-                $cacheDirectory ??= sys_get_temp_dir() . '/' . hash( 'xxh3', __DIR__ ),
-                // Asset cache directory
-                $assetDirectory ??= $cacheDirectory . '/' . 'assets',
-                // Manifest cache directory
-                $manifestDirectory ?? $assetDirectory,
-            ],
-        );
+        $this->cacheDirectory    = $cacheDirectory ??= sys_get_temp_dir() . '/' . hash( 'xxh3', __DIR__ );
+        $this->manifestDirectory = $manifestDirectory ?? $cacheDirectory . '/' . 'manifest';
 
         // Start CacheManager instance
         CacheManager::$instance = $this;
+
+        // Help the garbage collector
+        unset( $cacheDirectory, $manifestDirectory, $settings, $logger );
     }
 
     public static function status( string $namespace, bool $regenerated = false ) : void {
