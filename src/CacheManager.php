@@ -144,15 +144,16 @@ final class CacheManager
                 $ttl,
                 $dir,
             );
-        }
 
-        $this->logger->error(
-            message : "Using backup cache adapter for {namespace}. Assigned {adapter} as fallback.",
-            context : [
-                          'namespace' => $namespace,
-                          'adapter'   => $adapter::class,
-                      ],
-        );
+            $this->logger->error(
+                message : "Using backup cache adapter for {namespace}. Assigned {adapter} as fallback.",
+                context : [
+                              'namespace' => $namespace,
+                              'adapter'   => $adapter::class,
+                          ],
+            );
+
+        }
 
         return $adapter;
     }
