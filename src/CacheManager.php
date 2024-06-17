@@ -4,6 +4,9 @@ declare( strict_types = 1 );
 
 namespace Northrook;
 
+use JetBrains\PhpStorm\ArrayShape;
+use JetBrains\PhpStorm\ExpectedValues;
+use Northrook\Core\Env;
 use Northrook\Core\Trait\SingletonClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -12,20 +15,25 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\Adapter\PhpFilesAdapter;
 use Symfony\Component\Cache\Exception\CacheException;
+use function Northrook\Core\Functions\normalizePath;
 
 final class CacheManager
 {
     use SingletonClass;
 
     public const SETTINGS = [
-        'ttl'          => Cache::HOUR_4,
-        'ttl.memo'     => Cache::MINUTE,
-        'ttl.manifest' => Cache::FOREVER,
+        'dir'                               => null,
+        'ttl'                               => Cache::HOUR_4,
+        'memo.ttl'                          => Cache::MINUTE,
+        'memo.ephemeral.preferArrayAdapter' => null,
+        'manifest.dir'                      => null,
+        'manifest.ttl'                      => Cache::FOREVER,
     ];
 
-    private static array             $cacheStatus = [];
-    private readonly array           $settings;
-    private readonly LoggerInterface $logger;
+    /**
+     * @var array<string, int|bool|string>
+     */
+    private readonly array $settings;
 
     /**
      * @var array<string, AdapterInterface|class-string>
@@ -35,8 +43,7 @@ final class CacheManager
         'persistentMemoCache' => PhpFilesAdapter::class,
     ];
 
-    public readonly string $cacheDirectory;
-    public readonly string $manifestDirectory;
+    private readonly LoggerInterface $logger;
 
     /**
      * - If you choose to provide a cache directory, the path **must** be valid and writable.
@@ -53,16 +60,19 @@ final class CacheManager
         ?LoggerInterface $logger = null,
     ) {
         $this->instantiationCheck();
-        $this->logger   = $logger ?? new NullLogger();
-        $this->settings = array_merge( CacheManager::SETTINGS, $settings );
+        $this->logger = $logger ?? new NullLogger();
 
         // Parse directories, using system temp dir if none is provided
         $cacheDirectory    ??= sys_get_temp_dir() . '/' . hash( 'xxh3', __DIR__ );
         $manifestDirectory ??= $cacheDirectory . '/' . 'manifest';
 
-        // Set cache directories
-        $this->cacheDirectory = normalizeRealPath( $cacheDirectory );;
-        $this->manifestDirectory = normalizeRealPath( $manifestDirectory );
+        $settings += CacheManager::SETTINGS;
+
+        $settings[ 'dir' ]                               ??= normalizePath( $cacheDirectory );
+        $settings[ 'manifest.dir' ]                      ??= normalizePath( $manifestDirectory );
+        $settings[ 'memo.ephemeral.preferArrayAdapter' ] ??= Env::isDebug();
+
+        $this->settings = $settings;
 
         // Start CacheManager instance
         CacheManager::$instance = $this;
@@ -71,23 +81,8 @@ final class CacheManager
         unset( $cacheDirectory, $manifestDirectory, $settings, $logger );
     }
 
-    public static function status( string $namespace, bool $regenerated = false ) : void {
-
-        if ( $regenerated ) {
-            CacheManager::$cacheStatus[ $namespace ][ 'hit' ] = -1;
-            return;
-        }
-
-        CacheManager::$cacheStatus[ $namespace ][ 'hit' ] ??= 0;
-        CacheManager::$cacheStatus[ $namespace ][ 'hit' ]++;
-    }
-
     public static function get() : CacheManager {
         return CacheManager::$instance;
-    }
-
-    public static function getCacheStatus() : array {
-        return CacheManager::$cacheStatus;
     }
 
     public function addPool(
@@ -104,7 +99,7 @@ final class CacheManager
 
         $namespace = $ttl === null ? 'ephemeralMemoCache' : 'persistentMemoCache';
 
-        return CacheManager::getAdapter( $namespace );
+        return CacheManager::getInstance()->getAdapter( $namespace );
     }
 
     /**
@@ -113,7 +108,7 @@ final class CacheManager
      *
      * @return null|AdapterInterface
      */
-    public static function getAdapter( string $namespace, ?string $adapter = null ) : ?AdapterInterface {
+    public function getAdapter( string $namespace, ?string $adapter = null ) : ?AdapterInterface {
 
         $cache = CacheManager::getInstance();
 
@@ -123,10 +118,10 @@ final class CacheManager
             return $adapter;
         }
 
-        return $cache->adapterPool[ $namespace ] = $cache->backupAdapter( $namespace, $adapter );
+        return $cache->adapterPool[ $namespace ] = $cache->assignAdapter( $namespace, $adapter );
     }
 
-    private function backupAdapter(
+    private function assignAdapter(
         string        $namespace,
         null | string $backupAdapter = null,
     ) : AdapterInterface {
@@ -135,19 +130,21 @@ final class CacheManager
             return new ArrayAdapter();
         }
 
+        [ $ttl, $dir ] = CacheManager::setting( 'ttl', 'dir' );
+
         try {
             $adapter = $this->fallbackAdapter(
                 $backupAdapter,
                 $namespace,
-                $this->setting( 'ttl' ),
-                $this->cacheDirectory,
+                $ttl,
+                $dir,
             );
         }
         catch ( CacheException ) {
             $adapter = new FilesystemAdapter(
                 $namespace,
-                $this->setting( 'ttl' ),
-                $this->cacheDirectory,
+                $ttl,
+                $dir,
             );
         }
 
@@ -168,9 +165,10 @@ final class CacheManager
      *
      * @return AdapterInterface
      * @throws CacheException
+     * @noinspection PhpDocRedundantThrowsInspection
      */
-    private function fallbackAdapter( string $className, ...$arguments ) : AdapterInterface {
-        return new ( class_exists( $className ) ? $className : PhpFilesAdapter::class )( ...$arguments );
+    private function fallbackAdapter( ?string $className, ...$arguments ) : AdapterInterface {
+        return new ( class_exists( (string) $className ) ? $className : PhpFilesAdapter::class )( ...$arguments );
     }
 
     public function getAll() : array {
@@ -198,14 +196,29 @@ final class CacheManager
     }
 
     /**
-     * @param ?string  $get  = ... static::SETTINGS
+     * @param ?string  ...$get  = ['dir','ttl','memo.ephemeral.preferArrayAdapter','memo.ttl','manifest.dir','manifest.ttl'][$any]
      *
-     * @return array| bool|int|string|null
+     * @return array|bool|int|string|null
      */
-    private function setting(
-        ?string $get,
+    public static function setting(
+        ?string ...$get,
     ) : array | bool | int | string | null {
-        return $get ? $this->settings[ $get ] ?? null : $this->settings;
+
+        $settings = static::getInstance()->settings;
+
+        if ( $get === null ) {
+            return $settings;
+        }
+
+        $setting = [];
+
+        foreach ( $get as $key ) {
+            $setting[] = $settings[ $key ] ?? null;
+        }
+
+        return count( $setting ) === 1 ? $setting[ key( $setting ) ] : $setting;
+
     }
+
 
 }

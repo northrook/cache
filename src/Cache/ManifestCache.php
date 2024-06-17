@@ -8,6 +8,7 @@ use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\VarExporter\Exception\ExceptionInterface;
 use Symfony\Component\VarExporter\VarExporter;
+use function Northrook\Core\Functions\hashKey;
 
 final readonly class ManifestCache
 {
@@ -22,7 +23,7 @@ final readonly class ManifestCache
     }
 
     private static function path( string $name ) : string {
-        return CacheManager::get()->manifestDirectory . $name . '.manifest';
+        return CacheManager::setting( 'manifest.dir') . $name . '.manifest';
     }
 
     /**
@@ -41,7 +42,7 @@ final readonly class ManifestCache
             throw new \RuntimeException( "Manifest generation is disabled by the constructor." );
         }
 
-        $hash      = Cache::key( $manifest );
+        $hash      = hashKey( $manifest );
         $generated = new Timestamp();
 
         $generator = $this::class;
@@ -142,6 +143,6 @@ final readonly class ManifestCache
      * @return bool
      */
     private function validate( mixed $manifestData ) : bool {
-        return $manifestData[ 'hash' ] === Cache::key( $manifestData[ 'manifest' ] );
+        return $manifestData[ 'hash' ] === hashKey( $manifestData[ 'manifest' ] );
     }
 }

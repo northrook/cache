@@ -2,16 +2,20 @@
 
 namespace Northrook;
 
+use Northrook\Core\Env;
+use Northrook\Core\Trait\InstantiatedStaticClass;
+use Northrook\Core\Trait\SingletonClass;
 use Northrook\Core\Trait\StaticClass;
+use Symfony\Contracts\Cache\ItemInterface;
+use function Northrook\Core\Functions\hashKey;
+use function Northrook\Core\Functions\normalizeKey;
 
 /**
  * @author Martin Nielsen <mn@northrook.com>
  */
-final  class Cache
+final class Cache
 {
     use StaticClass;
-
-    private static bool $initialized = false;
 
     public const EPHEMERAL = null;
     public const FOREVER   = 0;
@@ -26,13 +30,89 @@ final  class Cache
     public const YEAR      = 31536000;
 
     /**
-     * Generate a unique key from provided arguments.
+     * - Not encrypted
+     * - Not persistent
      *
-     * @param mixed  $arguments
-     *
-     * @return string
+     * @var array
      */
-    public static function key( mixed $arguments ) : string {
-        return hash( 'xxh3', json_encode( $arguments ) ?: serialize( $arguments ) );
+    private static array $memoCache = [];
+
+    /**
+     * Retrieve the status of the in-memory memo cache.
+     *
+     * @return array
+     */
+    public static function status() : array {
+        return Cache::$memoCache;
+    }
+
+    /**
+     * Memoize a callback.
+     *
+     * - Can persist between requests
+     * - Can be encrypted by the Adapter
+     *
+     * @param callable     $callback
+     * @param array        $arguments
+     * @param null|string  $key
+     * @param null|int     $persistence
+     *
+     * @return mixed
+     */
+    public static function memoize(
+        callable $callback,
+        array    $arguments = [],
+        ?string  $key = null,
+        ?int     $persistence = Cache::EPHEMERAL,
+    ) : mixed {
+
+        if (
+            Cache::EPHEMERAL === $persistence &&
+            ! CacheManager::setting( 'memo.ephemeral.preferArrayAdapter' )
+        ) {
+            return Cache::memo( $callback, $arguments, $key );
+        }
+
+        $persistence ??= CacheManager::setting( 'memo.ttl' );
+
+        return CacheManager::memoAdapter( $persistence )->get(
+            key      : $key ?? hashKey( $arguments ),
+            callback : static function ( ItemInterface $memo ) use (
+                $callback, $arguments, $persistence
+            ) : mixed {
+                $memo->expiresAfter( $persistence );
+                return $callback( ...$arguments );
+            },
+        );
+    }
+
+    /**
+     * Simple in-memory cache.
+     *
+     * @param callable     $callback
+     * @param array        $arguments
+     * @param null|string  $key
+     *
+     * @return mixed
+     */
+    public static function memo(
+        callable $callback,
+        array    $arguments = [],
+        ?string  $key = null,
+    ) : mixed{
+
+        $key ??= hashKey( $arguments );
+
+        if ( !isset( Cache::$memoCache[ $key ] ) ) {
+            Cache::$memoCache[ $key ] = [
+                'value' => $callback( ...$arguments ),
+                'hit'   => 0,
+            ];
+        }
+        else {
+            Cache::$memoCache[ $key ][ 'hit' ]++;
+        }
+
+        return Cache::$memoCache[ $key ][ 'value' ];
     }
 }
