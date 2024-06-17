@@ -61,13 +61,13 @@ final class CacheManager
         $this->logger = $logger ?? new NullLogger();
 
         // Parse directories, using system temp dir if none is provided
-        $cacheDirectory    ??= sys_get_temp_dir() . '/' . hash( 'xxh3', __DIR__ );
-        $manifestDirectory ??= $cacheDirectory . '/' . 'manifest';
+        $cacheDirectory    ??= normalizePath( sys_get_temp_dir() . '/' . hash( 'xxh3', __DIR__ ) );
+        $manifestDirectory ??= normalizePath( $cacheDirectory . '/' . 'manifest' );
 
         $settings += CacheManager::SETTINGS;
 
-        $settings[ 'dir' ]                               ??= normalizePath( $cacheDirectory );
-        $settings[ 'manifest.dir' ]                      ??= normalizePath( $manifestDirectory );
+        $settings[ 'dir' ]                               ??= $cacheDirectory;
+        $settings[ 'manifest.dir' ]                      ??= $manifestDirectory;
         $settings[ 'memo.ephemeral.preferArrayAdapter' ] ??= Env::isDebug();
 
         $this->settings = $settings;
