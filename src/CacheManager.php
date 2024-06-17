@@ -4,8 +4,6 @@ declare( strict_types = 1 );
 
 namespace Northrook;
 
-use JetBrains\PhpStorm\ArrayShape;
-use JetBrains\PhpStorm\ExpectedValues;
 use Northrook\Core\Env;
 use Northrook\Core\Trait\SingletonClass;
 use Psr\Log\LoggerInterface;
@@ -182,10 +180,33 @@ final class CacheManager
         return $data;
     }
 
-    public function purgeAll() : void {
-        foreach ( $this->activeAdapters() as $adapter ) {
-            $adapter->clear();
+    /**
+     * @param string|string[]  $pools
+     * @param bool             $OPCache
+     * @param bool             $realPath
+     *
+     * @return void
+     */
+    public function clear(
+        string | array $pools,
+        bool           $OPCache = true,
+        bool           $realPath = true,
+    ) : void {
+
+        if ( $pools === 'all' ) {
+            foreach ( $this->activeAdapters() as $adapter ) {
+                $adapter->clear();
+            }
         }
+
+        if ( $OPCache ) {
+            opcache_reset();
+        }
+
+        if ( $realPath ) {
+            register_shutdown_function( 'clearstatcache' );
+        }
+
     }
 
     private function activeAdapters() : array {

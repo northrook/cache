@@ -2,7 +2,6 @@
 
 namespace Northrook\Cache;
 
-use Northrook\Cache;
 use Northrook\CacheManager;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;

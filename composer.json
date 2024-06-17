@@ -18,6 +18,7 @@
   "prefer-stable": true,
   "require": {
     "php": ">=8.2",
+    "ext-zend-opcache": "*",
     "psr/log": "^1|^2|^3",
     "symfony/cache": "@stable",
     "symfony/filesystem": "@stable",

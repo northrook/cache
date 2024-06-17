@@ -2,13 +2,9 @@
 
 namespace Northrook;
 
-use Northrook\Core\Env;
-use Northrook\Core\Trait\InstantiatedStaticClass;
-use Northrook\Core\Trait\SingletonClass;
 use Northrook\Core\Trait\StaticClass;
 use Symfony\Contracts\Cache\ItemInterface;
 use function Northrook\Core\Functions\hashKey;
-use function Northrook\Core\Functions\normalizeKey;
 
 /**
  * @author Martin Nielsen <mn@northrook.com>
@@ -68,7 +64,7 @@ final class Cache
 
         if (
             Cache::EPHEMERAL === $persistence &&
-            ! CacheManager::setting( 'memo.ephemeral.preferArrayAdapter' )
+            !CacheManager::setting( 'memo.ephemeral.preferArrayAdapter' )
         ) {
             return Cache::memo( $callback, $arguments, $key );
         }
@@ -78,7 +74,7 @@ final class Cache
         return CacheManager::memoAdapter( $persistence )->get(
             key      : $key ?? hashKey( $arguments ),
             callback : static function ( ItemInterface $memo ) use (
-                $callback, $arguments, $persistence
+                $callback, $arguments, $persistence,
             ) : mixed {
                 $memo->expiresAfter( $persistence );
                 return $callback( ...$arguments );
@@ -99,7 +95,7 @@ final class Cache
         callable $callback,
         array    $arguments = [],
         ?string  $key = null,
-    ) : mixed{
+    ) : mixed {
 
         $key ??= hashKey( $arguments );
 
