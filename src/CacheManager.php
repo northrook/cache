@@ -13,7 +13,7 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Cache\Adapter\PhpFilesAdapter;
 use Symfony\Component\Cache\Exception\CacheException;
-use function Northrook\Core\Functions\normalizePath;
+use function Northrook\Core\Function\normalizePath;
 
 final class CacheManager
 {

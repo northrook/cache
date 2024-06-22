@@ -7,7 +7,7 @@ use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\VarExporter\Exception\ExceptionInterface;
 use Symfony\Component\VarExporter\VarExporter;
-use function Northrook\Core\Functions\hashKey;
+use function Northrook\Core\Function\hashKey;
 
 final readonly class ManifestCache
 {

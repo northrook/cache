@@ -19,11 +19,10 @@
   "require": {
     "php": ">=8.2",
     "ext-zend-opcache": "*",
-    "psr/log": "^1|^2|^3",
+    "northrook/core": "dev-main",
     "symfony/cache": "@stable",
     "symfony/filesystem": "@stable",
-    "symfony/var-exporter": "@stable",
-    "northrook/core": "dev-main"
+    "symfony/var-exporter": "@stable"
   },
   "require-dev": {
     "northrook/dev-env": "dev-main"
