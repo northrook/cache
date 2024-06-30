@@ -13,7 +13,8 @@ final class Cache
 {
     use StaticClass;
 
-    public const EPHEMERAL = null;
+    public const EPHEMERAL = -1;
+    public const AUTO      = null;
     public const FOREVER   = 0;
     public const MINUTE    = 60;
     public const HOUR      = 3600;
