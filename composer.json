@@ -5,7 +5,7 @@
   "license": "MIT",
   "autoload": {
     "psr-4": {
-      "Northrook\\": "src/"
+      "Northrook\\": ""
     }
   },
   "authors": [
@@ -20,9 +20,8 @@
     "php": ">=8.2",
     "ext-zend-opcache": "*",
     "northrook/core": "dev-main",
-    "symfony/cache": "@stable",
-    "symfony/filesystem": "@stable",
-    "symfony/var-exporter": "@stable"
+    "northrook/filesystem": "dev-main",
+    "symfony/cache": "@stable"
   },
   "require-dev": {
     "northrook/dev-env": "dev-main"
