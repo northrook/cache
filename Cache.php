@@ -4,7 +4,7 @@ namespace Northrook;
 
 use Northrook\Core\Trait\StaticClass;
 use Symfony\Contracts\Cache\ItemInterface;
-use function Northrook\Core\hashKey;
+use function Northrook\hashKey;
 
 /**
  * @author Martin Nielsen <mn@northrook.com>

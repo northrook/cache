@@ -11,7 +11,7 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\{ArrayAdapter, FilesystemAdapter, PhpFilesAdapter};
 use Symfony\Component\Cache\Exception\CacheException;
 use Symfony\Contracts\Cache\CacheInterface;
-use function Northrook\Core\normalizePath;
+use function Northrook\normalizePath;
 
 final class CacheManager
 {
