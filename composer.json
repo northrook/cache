@@ -4,9 +4,9 @@
   "type": "library",
   "license": "MIT",
   "autoload": {
-    "psr-4": {
-      "Northrook\\Cache\\": ""
-    }
+    "files": [
+      "MemoizationCache.php"
+    ]
   },
   "authors": [
     {
