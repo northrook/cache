@@ -1,5 +1,7 @@
 <?php
 
+declare( strict_types = 1 );
+
 namespace Northrook\Cache;
 
 use Northrook\Core\Trait\InstantiatedStaticClass;
@@ -8,6 +10,19 @@ use Symfony\Contracts\Cache as Symfony;
 use function Northrook\{hashKey, normalizeKey};
 use const Northrook\EPHEMERAL;
 
+/**
+ * Cache the result of a callable, improving  performance by avoiding redundant computations.
+ *
+ * It utilizes the {@see \Northrook\Cache\MemoizationCache} class,
+ * which can either use an in-memory cache,  or a Symfony {@see Symfony\CacheInterface} if provided.
+ *
+ * @param callable  $callback     The function to cache
+ * @param array     $arguments    Arguments for the $callback
+ * @param ?string   $key          [optional] key - a hash based on $callback and $arguments will be used if null
+ * @param ?int      $persistence  The duration in seconds for the cache entry. Requires {@see Symfony\CacheInterface}.
+ *
+ * @return mixed
+ */
 function memoize(
     callable $callback,
     array    $arguments = [],
