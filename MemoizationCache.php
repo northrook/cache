@@ -39,6 +39,7 @@ final class MemoizationCache
 {
     use InstantiatedStaticClass;
 
+    // Now found in functions, as const\Northrook\%CONST%
     public const EPHEMERAL = -1;
     public const AUTO      = null;
     public const FOREVER   = 0;
@@ -69,7 +70,7 @@ final class MemoizationCache
     }
 
     public static function instance() : MemoizationCache {
-        return MemoizationCache::$instance;
+        return MemoizationCache::$instance ?? new MemoizationCache();
     }
 
     /**
