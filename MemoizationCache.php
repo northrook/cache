@@ -3,24 +3,10 @@
 namespace Northrook\Cache;
 
 use Northrook\Core\Trait\InstantiatedStaticClass;
-use Psr\Log\LoggerInterface;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\Cache\ItemInterface;
-use function Northrook\hashKey;
-use function Northrook\normalizeKey;
-
-const EPHEMERAL = -1;
-const AUTO      = null;
-const FOREVER   = 0;
-const MINUTE    = 60;
-const HOUR      = 3600;
-const HOUR_4    = 14400;
-const HOUR_8    = 28800;
-const HOUR_12   = 43200;
-const DAY       = 86400;
-const WEEK      = 604800;
-const MONTH     = 2592000;
-const YEAR      = 31536000;
+use Psr\Log as Psr;
+use Symfony\Contracts\Cache as Symfony;
+use function Northrook\{hashKey, normalizeKey};
+use const Northrook\EPHEMERAL;
 
 function memoize(
     callable $callback,
@@ -39,20 +25,6 @@ final class MemoizationCache
 {
     use InstantiatedStaticClass;
 
-    // Now found in functions, as const\Northrook\%CONST%
-    public const EPHEMERAL = -1;
-    public const AUTO      = null;
-    public const FOREVER   = 0;
-    public const MINUTE    = 60;
-    public const HOUR      = 3600;
-    public const HOUR_4    = 14400;
-    public const HOUR_8    = 28800;
-    public const HOUR_12   = 43200;
-    public const DAY       = 86400;
-    public const WEEK      = 604800;
-    public const MONTH     = 2592000;
-    public const YEAR      = 31536000;
-
     /**
      * - Not encrypted
      * - Not persistent
@@ -62,8 +34,8 @@ final class MemoizationCache
     private array $inMemoryCache = [];
 
     public function __construct(
-        private readonly ?CacheInterface  $cacheInterface = null,
-        private readonly ?LoggerInterface $logger = null,
+        private readonly ?Symfony\CacheInterface $cacheInterface = null,
+        private readonly ?Psr\LoggerInterface    $logger = null,
     ) {
         $this->instantiationCheck();
         $this::$instance = $this;
@@ -112,7 +84,7 @@ final class MemoizationCache
         try {
             return $this->cacheInterface->get(
                 key      : $key,
-                callback : static function ( ItemInterface $memo ) use (
+                callback : static function ( Symfony\ItemInterface $memo ) use (
                     $callback, $arguments, $persistence,
                 ) : mixed {
                     $memo->expiresAfter( $persistence );
