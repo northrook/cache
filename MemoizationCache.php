@@ -8,7 +8,7 @@ use Northrook\Core\Trait\InstantiatedStaticClass;
 use Psr\Log as Psr;
 use Symfony\Contracts\Cache as Symfony;
 use function Northrook\{hashKey, normalizeKey};
-use const Northrook\EPHEMERAL;
+use const Persistence\EPHEMERAL;
 
 /**
  * Cache the result of a callable, improving  performance by avoiding redundant computations.
