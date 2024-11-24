@@ -20,8 +20,7 @@
   "minimum-stability": "dev",
   "prefer-stable": true,
   "require": {
-    "php": ">=8.2",
-    "ext-zend-opcache": "*"
+    "php": ">=8.2"
   },
   "require-dev": {
     "symfony/cache": "@stable",

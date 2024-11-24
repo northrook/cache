@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace Cache;
 
 use Psr\Cache\CacheItemPoolInterface;
-use BadMethodCallException;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache\{CacheInterface, ItemInterface};
-use Throwable;
-use Closure;
-use ReflectionFunction;
+use Closure, ReflectionFunction, Throwable, BadMethodCallException;
 
 abstract class CacheHandler
 {
