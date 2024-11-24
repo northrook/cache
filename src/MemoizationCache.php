@@ -11,7 +11,7 @@ use Closure, LogicException;
 
 final class MemoizationCache extends CacheHandler
 {
-    private static ?MemoizationCache $instance;
+    private static ?MemoizationCache $instance = null;
 
     /**
      * @param null|CacheItemPoolInterface $cacheAdapter
@@ -30,15 +30,29 @@ final class MemoizationCache extends CacheHandler
     }
 
     /**
-     * @param callable-string|Closure|string $callback
-     * @param null|string                    $key
-     * @param null|int                       $persistence
+     * @template Type
      *
-     * @return mixed
+     * @param array{0:class-string, 1:string}|callable():Type|Closure():Type $callback    a function or method to cache, optionally with extra arguments as array values
+     * @param ?string                                                        $key         [optional] Key - a hash based on $callback and $arguments will be used if null
+     * @param ?int                                                           $persistence the duration in seconds for the cache entry
+     *
+     * @return Type
+     * @phpstan-return Type
      */
-    public function cache( string|Closure $callback, ?string $key = null, ?int $persistence = EPHEMERAL ) : mixed
-    {
-        \assert( \is_callable( $callback ), __METHOD__.'( $callback .. ) must be callable.' );
+    public function set(
+        Closure|callable|array $callback,
+        ?string                $key = null,
+        ?int                   $persistence = EPHEMERAL,
+    ) : mixed {
+        if ( \is_array( $callback ) && ! \is_callable( $callback ) ) {
+            [$callable, $arguments] = \array_chunk( $callback, 2 );
+
+            \assert( \is_callable( $callable ), __METHOD__.'( $callback .. ) must be callable.' );
+
+            $callback = static fn() => \call_user_func_array( $callable, $arguments );
+        }
+
+        \assert( $callback instanceof Closure, __METHOD__.'( $callback .. ) must be callable.' );
 
         $key ??= $this->keyFromCallbackArguments( $callback );
 
@@ -59,7 +73,7 @@ final class MemoizationCache extends CacheHandler
     /**
      * Retrieve the {@see MemoizationCache::$instance}, instantiating it if required.
      *
-     * - To use a {@see Symfony\CacheInterface}, instantiate before making your first {@see cache()} call.
+     * - To use a {@see Symfony\CacheInterface}, instantiate before making your first {@see set()} call.
      *
      * @return MemoizationCache
      */

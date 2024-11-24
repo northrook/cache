@@ -23,16 +23,19 @@ const FOREVER   = 0;
  *
  * Potential later initializations will import the `$inMemoryCache`.
  *
- * @param Closure $callback    The function to cache
- * @param ?string $key         [optional] key - a hash based on $callback and $arguments will be used if null
- * @param ?int    $persistence The duration in seconds for the cache entry. Requires a {@see \Psr\Cache\CacheItemPoolInterface}.
+ * @template Type
  *
- * @return mixed
+ * @param array{0:class-string, 1:string}|callable():Type|Closure():Type $callback    a function or method to cache, optionally with extra arguments as array values
+ * @param ?string                                                        $key         [optional] Key - a hash based on $callback and $arguments will be used if null
+ * @param ?int                                                           $persistence the duration in seconds for the cache entry
+ *
+ * @return Type
+ * @phpstan-return Type
  */
 function memoize(
-    Closure $callback,
-    ?string $key = null,
-    ?int    $persistence = EPHEMERAL,
+    Closure|callable|array $callback,
+    ?string                $key = null,
+    ?int                   $persistence = EPHEMERAL,
 ) : mixed {
-    return MemoizationCache::instance()->cache( $callback, $key, $persistence );
+    return MemoizationCache::instance()->set( $callback, $key, $persistence );
 }

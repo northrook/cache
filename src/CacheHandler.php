@@ -7,10 +7,10 @@ namespace Cache;
 use Psr\Cache\CacheItemPoolInterface;
 use BadMethodCallException;
 use Psr\Log\LoggerInterface;
-use ReflectionFunction;
 use Symfony\Contracts\Cache\{CacheInterface, ItemInterface};
 use Throwable;
 use Closure;
+use ReflectionFunction;
 
 abstract class CacheHandler
 {
@@ -20,17 +20,27 @@ abstract class CacheHandler
     public function __construct(
         protected readonly ?CacheItemPoolInterface $cacheAdapter = null,
         protected readonly ?LoggerInterface        $logger = null,
+        private readonly bool                      $hashCacheKeys = true,
     ) {
     }
 
+    private function cacheKey( string $value ) : string
+    {
+        return $this->hashCacheKeys ? \hash( 'xxh3', $value ) : $value;
+    }
+
     /**
-     * @param string                  $key
-     * @param callable-string|Closure $callback
+     * @param string           $key
+     * @param callable|Closure $callback
      *
      * @return mixed
      */
-    final protected function inMemoryCache( string $key, string|Closure $callback ) : mixed
-    {
+    final protected function inMemoryCache(
+        string           $key,
+        callable|Closure $callback,
+    ) : mixed {
+        $key = $this->cacheKey( $key );
+
         if ( ! isset( $this->inMemoryCache[$key] ) ) {
             $this->inMemoryCache[$key] = [
                 'value' => $callback(),
@@ -45,22 +55,22 @@ abstract class CacheHandler
     }
 
     /**
-     * @param string                  $key
-     * @param callable-string|Closure $callback
-     * @param null|int                $persistence
+     * @param string           $key
+     * @param callable|Closure $callback
+     * @param null|int         $persistence
      *
      * @return mixed
      */
     final protected function symfonyCacheInterface(
-        string         $key,
-        string|Closure $callback,
-        ?int           $persistence = EPHEMERAL,
+        string           $key,
+        callable|Closure $callback,
+        ?int             $persistence = EPHEMERAL,
     ) : mixed {
         \assert( $this->cacheAdapter instanceof CacheInterface );
 
         try {
             return $this->cacheAdapter->get(
-                key      : $key,
+                key      : $this->cacheKey( $key ),
                 callback : static function( ItemInterface $memo ) use ( $callback, $persistence ) : mixed {
                     $memo->expiresAfter( $persistence );
                     return $callback();
@@ -74,22 +84,22 @@ abstract class CacheHandler
     }
 
     /**
-     * @param string                  $key
-     * @param callable-string|Closure $callback
-     * @param null|int                $persistence
+     * @param string           $key
+     * @param callable|Closure $callback
+     * @param null|int         $persistence
      *
      * @return mixed
      */
     final protected function psrCacheInterface(
-        string         $key,
-        string|Closure $callback,
-        ?int           $persistence = EPHEMERAL,
+        string           $key,
+        callable|Closure $callback,
+        ?int             $persistence = EPHEMERAL,
     ) : mixed {
         \assert( $this->cacheAdapter instanceof CacheItemPoolInterface );
 
         // Attempt to get the cache item
         try {
-            $item = $this->cacheAdapter->getItem( $key );
+            $item = $this->cacheAdapter->getItem( $this->cacheKey( $key ) );
         }
         catch ( Throwable $exception ) {
             $this->handleError( $exception );
@@ -156,8 +166,9 @@ abstract class CacheHandler
     final protected function keyFromCallbackArguments( string|Closure $callback ) : string
     {
         try {
-            $args = new ReflectionFunction( $callback );
-            return \hash( 'xxh3', \serialize( $args->getClosureUsedVariables() ) );
+            $usedArguments = ( new ReflectionFunction( $callback ) )->getClosureUsedVariables();
+            // dump( $usedArguments );
+            return \serialize( $usedArguments );
         }
         catch ( Throwable $exception ) {
             throw new BadMethodCallException( $exception->getMessage(), 500, $exception );
