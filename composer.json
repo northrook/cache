@@ -4,8 +4,11 @@
   "type": "library",
   "license": "MIT",
   "autoload": {
+    "psr-4": {
+      "Cache\\": "src/"
+    },
     "files": [
-      "MemoizationCache.php"
+      "src/cache.php"
     ]
   },
   "authors": [
@@ -18,11 +21,13 @@
   "prefer-stable": true,
   "require": {
     "php": ">=8.2",
-    "ext-zend-opcache": "*",
-    "northrook/core": "dev-main",
-    "symfony/cache": "@stable"
+    "ext-zend-opcache": "*"
   },
   "require-dev": {
+    "symfony/cache": "@stable",
     "northrook/dev-env": "dev-main"
+  },
+  "scripts": {
+    "phpstan": "vendor/bin/phpstan analyse"
   }
 }
