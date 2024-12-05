@@ -16,12 +16,14 @@ final class MemoizationCache extends CacheHandler
     /**
      * @param null|CacheItemPoolInterface $cacheAdapter
      * @param null|LoggerInterface        $logger
+     * @param bool                        $debug
      */
     public function __construct(
         ?CacheItemPoolInterface $cacheAdapter = null,
         ?LoggerInterface        $logger = null,
+        private readonly bool   $debug = false,
     ) {
-        parent::__construct( $cacheAdapter, $logger );
+        parent::__construct( $cacheAdapter, $logger, ! $this->debug );
 
         if ( $this::$instance ) {
             $this->inMemoryCache = $this::$instance->inMemoryCache;
