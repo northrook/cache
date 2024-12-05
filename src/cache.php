@@ -42,6 +42,12 @@ function memoize(
     return MemoizationCache::instance()->set( $callback, $key, $persistence );
 }
 
+/**
+ * @param null|array<int, ?string>|string $string
+ * @param bool                            $hash
+ *
+ * @return string
+ */
 function key( string|array|null $string, bool $hash = false ) : string
 {
     return $hash ? hashKey( $string ) : Normalize::key( $string );
