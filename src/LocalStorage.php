@@ -196,6 +196,7 @@ final class LocalStorage
             -{$storageDataHash}--------------------------------------------------*/
             
             return {$dataExport};
+
             PHP;
 
         try {
