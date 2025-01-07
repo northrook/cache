@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Cache;
 
-use LogicException;
-use Support\{Time};
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\VarExporter\Exception\ExceptionInterface;
 use Symfony\Component\VarExporter\VarExporter;
-use InvalidArgumentException;
-use Throwable;
+use DateTimeImmutable;
+use Throwable, LogicException, InvalidArgumentException, DateMalformedStringException;
 
 final class LocalStorage
 {
@@ -30,7 +28,7 @@ final class LocalStorage
         ?string                 $name = null,
         ?string                 $generator = null,
         protected bool          $autosave = true,
-        protected bool          $validate = false,
+        protected bool          $validate = true,
     ) {
         $this->name      = $name      ?? \basename( $this->filePath );
         $this->generator = $generator ?? $this::class;
@@ -225,7 +223,7 @@ final class LocalStorage
      * @return bool
      *
      * @throws InvalidArgumentException on `VarExporter` failures
-     * @throws LogicException           on `Filesystem` failures
+     * @throws LogicException           on `Filesystem` or `DateTime` failures
      */
     final public function save() : bool
     {
@@ -244,13 +242,19 @@ final class LocalStorage
 
         $storageDataHash = \hash( algo : 'xxh3', data : $dataExport );
 
-        if ( $storageDataHash === $this->hash ) {
+        if ( $this->validate && $storageDataHash === $this->hash ) {
             return false;
         }
 
-        $generated = new Time();
-        $timestamp = $generated->unixTimestamp;
-        $date      = $generated->datetime;
+        try {
+            $dateTime = new DateTimeImmutable( timezone : \timezone_open( 'UTC' ) ?: null );
+        }
+        catch ( DateMalformedStringException $e ) {
+            throw new LogicException( $e->getMessage(), $e->getCode(), $e );
+        }
+
+        $timestamp = $dateTime->getTimestamp();
+        $date      = $dateTime->format( 'Y-m-d H:i:s e' );
 
         $localStorage = <<<PHP
             <?php
@@ -273,7 +277,7 @@ final class LocalStorage
             PHP;
 
         try {
-            ( new Filesystem() )->dumpFile( $this->filePath, $localStorage );
+            ( new Filesystem() )->dumpFile( $this->filePath, $localStorage.PHP_EOL );
         }
         catch ( Throwable $e ) {
             throw new LogicException( $e->getMessage(), $e->getCode(), $e );
