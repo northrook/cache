@@ -17,6 +17,8 @@ final class LocalStorage
     /** @var array<string, mixed> */
     private array $data;
 
+    private readonly string $hash;
+
     protected bool $locked = true;
 
     public readonly string $name;
@@ -115,6 +117,17 @@ final class LocalStorage
         $this->locked = false;
     }
 
+    /**
+     * Add a `value` by `key`.
+     *
+     * - Will not override existing `value`.
+     * - Changes won't be commited until a {@see \Cache\LocalStorage::save()} action is taken.
+     *
+     * @param string $key
+     * @param mixed  $value
+     *
+     * @return void
+     */
     public function add( string $key, mixed $value ) : void
     {
         if ( $this->has( $key ) ) {
@@ -124,27 +137,62 @@ final class LocalStorage
         $this->locked     = false;
     }
 
+    /**
+     * Manually set a `value` by `key`.
+     *
+     * - Will override current `value` if present.
+     * - Changes won't be commited until a {@see \Cache\LocalStorage::save()} action is taken.
+     *
+     * @param string $key
+     * @param mixed  $value
+     *
+     * @return void
+     */
     public function set( string $key, mixed $value ) : void
     {
         $this->data[$key] = $value;
         $this->locked     = false;
     }
 
+    /**
+     * Check if a `key` is present in the {@see \Cache\LocalStorage::$data} set.
+     *
+     * @param string $key
+     *
+     * @return bool
+     */
     public function has( string $key ) : bool
     {
         return \array_key_exists( $key, $this->getData() );
     }
 
+    /**
+     * Unsets a {@see \Cache\LocalStorage::$data} value by `key`.
+     *
+     * - Changes won't be commited until a {@see \Cache\LocalStorage::save()} action is taken.
+     *
+     * @param string $key
+     *
+     * @return bool
+     */
     public function delete( string $key ) : bool
     {
         if ( ! isset( $this->data ) ) {
             $this->initialize();
         }
 
-        return true;
+        if ( isset( $this->data[$key] ) ) {
+            unset( $this->data[$key] );
+            $this->locked = false;
+            return true;
+        }
+
+        return false;
     }
 
     /**
+     * Returns the keys used to store {@see \Cache\LocalStorage::$data}.
+     *
      * @return string[]
      */
     public function getKeys() : array
@@ -153,6 +201,8 @@ final class LocalStorage
     }
 
     /**
+     * Returns an array of all {@see \Cache\LocalStorage::$data}.
+     *
      * @return array<string, mixed>
      */
     public function getAll() : array
@@ -160,13 +210,29 @@ final class LocalStorage
         return $this->getData();
     }
 
+    /**
+     * Commits {@see \Cache\LocalStorage::$data} to disk.
+     *
+     * It is recommended to perform this action after `shutdown`.
+     *
+     * - `autosave` is triggered on `__destruct`.
+     * - {@see VarExporter} handles serialization.
+     * - {@see Filesystem} handles disk operations.
+     * - `locked` is ignored when `autosave` is disabled.
+     * - Will check against stored `hash` before saving.
+     * - Always `locked` before commiting.
+     *
+     * @return bool
+     *
+     * @throws InvalidArgumentException on `VarExporter` failures
+     * @throws LogicException           on `Filesystem` failures
+     */
     final public function save() : bool
     {
-        if ( empty( $this->data ) || $this->locked ) {
+        if ( $this->autosave && ( empty( $this->data ) || $this->locked ) ) {
             return false;
         }
 
-        // Prevent changes to the $data until we're done saving
         $this->locked = true;
 
         try {
@@ -177,9 +243,14 @@ final class LocalStorage
         }
 
         $storageDataHash = \hash( algo : 'xxh3', data : $dataExport );
-        $generated       = new Time();
-        $timestamp       = $generated->unixTimestamp;
-        $date            = $generated->datetime;
+
+        if ( $storageDataHash === $this->hash ) {
+            return false;
+        }
+
+        $generated = new Time();
+        $timestamp = $generated->unixTimestamp;
+        $date      = $generated->datetime;
 
         $localStorage = <<<PHP
             <?php
@@ -193,10 +264,12 @@ final class LocalStorage
             
                Do not edit it manually.
             
-            -{$storageDataHash}--------------------------------------------------*/
+            -#{$storageDataHash}#------------------------------------------------*/
             
-            return {$dataExport};
-
+            return [
+                '{$storageDataHash}',
+                {$dataExport}
+            ];
             PHP;
 
         try {
@@ -225,11 +298,12 @@ final class LocalStorage
     {
         if ( ! \file_exists( $this->filePath ) ) {
             $this->data = [];
+            $this->hash = 'initial';
             return;
         }
 
         try {
-            $this->data = include $this->filePath;
+            [$this->hash, $this->data] = include $this->filePath;
         }
         catch ( ExceptionInterface $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
