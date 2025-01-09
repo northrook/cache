@@ -10,12 +10,21 @@ use Symfony\Component\VarExporter\VarExporter;
 use DateTimeImmutable;
 use Throwable, LogicException, InvalidArgumentException, DateMalformedStringException;
 
+/**
+ * File cache designed for high-performance data persistence.
+ *
+ * - Data is stored as a local file, loaded lazily on request.
+ * - Write operations are deferred until the shutdown phase to minimize I/O overhead.
+ * - Relies on OPCache for performance, ensuring cached files are optimized for repeated access.
+ * - Intended for storing application-generated data that can be regenerated if necessary.
+ * - Does not support external storage or distributed caching mechanisms.
+ */
 final class LocalStorage
 {
     /** @var array<string, mixed> */
     private array $data;
 
-    private readonly string $hash;
+    private ?string $hash;
 
     protected bool $locked = true;
 
@@ -23,6 +32,13 @@ final class LocalStorage
 
     public readonly string $generator;
 
+    /**
+     * @param string      $filePath
+     * @param null|string $name      `$filePath` basename as fallback
+     * @param null|string $generator `__CLASS__` as fallback
+     * @param bool        $autosave  [true] saves on `__destruct`
+     * @param bool        $validate  [true] validate against stored hash before saving
+     */
     public function __construct(
         private readonly string $filePath,
         ?string                 $name = null,
@@ -31,7 +47,7 @@ final class LocalStorage
         protected bool          $validate = true,
     ) {
         $this->name      = $name      ?? \basename( $this->filePath );
-        $this->generator = $generator ?? $this::class;
+        $this->generator = $generator ?? __CLASS__;
     }
 
     public function __destruct()
@@ -41,6 +57,13 @@ final class LocalStorage
         }
     }
 
+    /**
+     * @param string         $key
+     * @param null|callable  $callback
+     * @param mixed|null     $fallback
+     *
+     * @return mixed
+     */
     public function get(
         string    $key,
         ?callable $callback = null,
@@ -64,7 +87,7 @@ final class LocalStorage
     }
 
     /**
-     * Set the {@see \Cache\LocalStorage::$data}.
+     * Set the {@see LocalStorage::$data}.
      *
      * ⚠️ Overrides the current data.
      *
@@ -90,7 +113,7 @@ final class LocalStorage
     }
 
     /**
-     * Merge with the current the {@see \Cache\LocalStorage::$data}.
+     * Merge with the current the {@see LocalStorage::$data}.
      *
      * @param array<string, mixed> $data
      * @param bool                 $recursive
@@ -119,7 +142,7 @@ final class LocalStorage
      * Add a `value` by `key`.
      *
      * - Will not override existing `value`.
-     * - Changes won't be commited until a {@see \Cache\LocalStorage::save()} action is taken.
+     * - Changes won't be commited until a {@see LocalStorage::save()} action is taken.
      *
      * @param string $key
      * @param mixed  $value
@@ -139,7 +162,7 @@ final class LocalStorage
      * Manually set a `value` by `key`.
      *
      * - Will override current `value` if present.
-     * - Changes won't be commited until a {@see \Cache\LocalStorage::save()} action is taken.
+     * - Changes won't be commited until a {@see LocalStorage::save()} action is taken.
      *
      * @param string $key
      * @param mixed  $value
@@ -153,7 +176,7 @@ final class LocalStorage
     }
 
     /**
-     * Check if a `key` is present in the {@see \Cache\LocalStorage::$data} set.
+     * Check if a `key` is present in the {@see LocalStorage::$data} set.
      *
      * @param string $key
      *
@@ -165,9 +188,9 @@ final class LocalStorage
     }
 
     /**
-     * Unsets a {@see \Cache\LocalStorage::$data} value by `key`.
+     * Unsets a {@see LocalStorage::$data} value by `key`.
      *
-     * - Changes won't be commited until a {@see \Cache\LocalStorage::save()} action is taken.
+     * - Changes won't be commited until a {@see LocalStorage::save()} action is taken.
      *
      * @param string $key
      *
@@ -189,7 +212,7 @@ final class LocalStorage
     }
 
     /**
-     * Returns the keys used to store {@see \Cache\LocalStorage::$data}.
+     * Returns the keys used to store {@see LocalStorage::$data}.
      *
      * @return string[]
      */
@@ -199,7 +222,7 @@ final class LocalStorage
     }
 
     /**
-     * Returns an array of all {@see \Cache\LocalStorage::$data}.
+     * Returns an array of all {@see LocalStorage::$data}.
      *
      * @return array<string, mixed>
      */
@@ -208,8 +231,13 @@ final class LocalStorage
         return $this->getData();
     }
 
+    public function hasChanges() : bool
+    {
+        return ! $this->locked;
+    }
+
     /**
-     * Commits {@see \Cache\LocalStorage::$data} to disk.
+     * Commits {@see LocalStorage::$data} to disk.
      *
      * It is recommended to perform this action after `shutdown`.
      *
@@ -234,7 +262,7 @@ final class LocalStorage
         $this->locked = true;
 
         try {
-            $dataExport = VarExporter::export( $this->data );
+            $dataExport = VarExporter::export( $this->data ?? [] );
         }
         catch ( ExceptionInterface $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
@@ -242,7 +270,7 @@ final class LocalStorage
 
         $storageDataHash = \hash( algo : 'xxh3', data : $dataExport );
 
-        if ( $this->validate && $storageDataHash === $this->hash ) {
+        if ( $this->validate && $storageDataHash === ( $this->hash ?? null ) ) {
             return false;
         }
 
