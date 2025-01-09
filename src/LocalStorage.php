@@ -58,9 +58,9 @@ final class LocalStorage
     }
 
     /**
-     * @param string         $key
-     * @param null|callable  $callback
-     * @param mixed|null     $fallback
+     * @param string        $key
+     * @param null|callable $callback
+     * @param null|mixed    $fallback
      *
      * @return mixed
      */
