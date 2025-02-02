@@ -26,7 +26,8 @@
   },
   "require-dev": {
     "symfony/cache": "@stable",
-    "northrook/dev-env": "dev-main"
+    "northrook/dev-env": "dev-main",
+    "psr/simple-cache": "^3.0"
   },
   "scripts": {
     "phpstan": "vendor/bin/phpstan analyse"

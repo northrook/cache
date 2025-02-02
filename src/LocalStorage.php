@@ -16,9 +16,13 @@ use Throwable, LogicException, InvalidArgumentException, DateMalformedStringExce
  *
  * - Data is stored as a local file, loaded lazily on request.
  * - Write operations are deferred until the shutdown phase to minimize I/O overhead.
- * - Relies on OPCache for performance, ensuring cached files are optimized for repeated access.
- * - Intended for storing application-generated data that can be regenerated if necessary.
- * - Does not support external storage or distributed caching mechanisms.
+ * - Intended for application-generated data that can be regenerated if necessary.
+ *
+ *  Interoperable with:
+ *  - {@see \Psr\SimpleCache\CacheInterface} `get( $key )`, `set`, `has`, `delete`, `clear`
+ *  - {@see \Symfony\Contracts\Cache\CacheInterface} `get( $key, $callback )` and `delete`
+ *
+ * @author Martin Nielsen <mn@northrook.com>
  */
 final class LocalStorage implements StorageInterface
 {
@@ -54,16 +58,18 @@ final class LocalStorage implements StorageInterface
     public function __destruct()
     {
         if ( $this->autosave && ! empty( $this->data ) ) {
-            $this->save();
+            $this->commit();
         }
     }
 
     /**
-     * @param string        $key
-     * @param null|callable $callback
-     * @param null|mixed    $fallback
+     * @template Value
      *
-     * @return mixed
+     * @param string            $key
+     * @param ?callable():Value $callback
+     * @param null|mixed        $fallback
+     *
+     * @return mixed|Value
      */
     public function get(
         string    $key,
@@ -148,15 +154,16 @@ final class LocalStorage implements StorageInterface
      * @param string $key
      * @param mixed  $value
      *
-     * @return void
+     * @return bool
      */
-    public function add( string $key, mixed $value ) : void
+    public function add( string $key, mixed $value ) : bool
     {
         if ( $this->has( $key ) ) {
-            return;
+            return false;
         }
         $this->data[$key] = $value;
         $this->locked     = false;
+        return true;
     }
 
     /**
@@ -168,12 +175,14 @@ final class LocalStorage implements StorageInterface
      * @param string $key
      * @param mixed  $value
      *
-     * @return void
+     * @return bool
      */
-    public function set( string $key, mixed $value ) : void
+    public function set( string $key, mixed $value ) : bool
     {
         $this->data[$key] = $value;
         $this->locked     = false;
+
+        return true;
     }
 
     /**
@@ -254,7 +263,7 @@ final class LocalStorage implements StorageInterface
      * @throws InvalidArgumentException on `VarExporter` failures
      * @throws LogicException           on `Filesystem` or `DateTime` failures
      */
-    final public function save() : bool
+    public function commit() : bool
     {
         if ( $this->autosave && ( empty( $this->data ) || $this->locked ) ) {
             return false;
@@ -312,6 +321,13 @@ final class LocalStorage implements StorageInterface
             throw new LogicException( $e->getMessage(), $e->getCode(), $e );
         }
 
+        return true;
+    }
+
+    public function clear() : bool
+    {
+        $this->data   = [];
+        $this->locked = false;
         return true;
     }
 
