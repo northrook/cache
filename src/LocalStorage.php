@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Cache;
 
+use Core\Interface\StorageInterface;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\VarExporter\Exception\ExceptionInterface;
 use Symfony\Component\VarExporter\VarExporter;
+use Symfony\Component\VarExporter\Exception\ExceptionInterface;
 use DateTimeImmutable;
 use Throwable, LogicException, InvalidArgumentException, DateMalformedStringException;
 
@@ -19,7 +20,7 @@ use Throwable, LogicException, InvalidArgumentException, DateMalformedStringExce
  * - Intended for storing application-generated data that can be regenerated if necessary.
  * - Does not support external storage or distributed caching mechanisms.
  */
-final class LocalStorage
+final class LocalStorage implements StorageInterface
 {
     /** @var array<string, mixed> */
     private array $data;

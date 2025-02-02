@@ -18,8 +18,7 @@ abstract class CacheHandler
         protected readonly ?CacheItemPoolInterface $cacheAdapter = null,
         protected readonly ?LoggerInterface        $logger = null,
         private readonly bool                      $hashCacheKeys = true,
-    ) {
-    }
+    ) {}
 
     private function cacheKey( string $value ) : string
     {

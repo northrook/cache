@@ -5,7 +5,7 @@
   "license": "MIT",
   "autoload": {
     "psr-4": {
-      "Cache\\": "src/"
+      "Cache\\": "src"
     },
     "files": [
       "src/cache.php"
@@ -20,8 +20,9 @@
   "minimum-stability": "dev",
   "prefer-stable": true,
   "require": {
-    "php": ">=8.2",
-    "psr/cache": "^3.0"
+    "php": ">=8.3",
+    "psr/cache": "^3.0",
+    "northrook/core": "dev-main"
   },
   "require-dev": {
     "symfony/cache": "@stable",

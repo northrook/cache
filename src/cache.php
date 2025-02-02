@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Cache;
 
 use Closure;
-use Support\Normalize;
-use function String\hashKey;
 
 const DISABLED  = -2;
 const EPHEMERAL = -1;
@@ -40,15 +38,4 @@ function memoize(
     ?int                   $persistence = EPHEMERAL,
 ) : mixed {
     return MemoizationCache::instance()->set( $callback, $key, $persistence );
-}
-
-/**
- * @param null|array<int, ?string>|string $string
- * @param bool                            $hash
- *
- * @return string
- */
-function key( string|array|null $string, bool $hash = false ) : string
-{
-    return $hash ? hashKey( $string ) : Normalize::key( $string );
 }
