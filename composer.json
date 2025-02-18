@@ -22,12 +22,13 @@
   "require": {
     "php": ">=8.3",
     "psr/cache": "^3.0",
-    "psr/simple-cache": "^3.0",
-    "northrook/core": "dev-main"
+    "symfony/var-exporter": "@stable",
+    "northrook/core": "dev-main",
+    "symfony/cache-contracts": "^3.5"
   },
   "require-dev": {
-    "symfony/cache": "@stable",
-    "northrook/dev-env": "dev-main"
+    "northrook/dev": "dev-main",
+    "symfony/cache": "^7.2"
   },
   "scripts": {
     "phpstan": "vendor/bin/phpstan analyse"
