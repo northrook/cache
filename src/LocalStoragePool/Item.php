@@ -76,7 +76,7 @@ final class Item implements CacheItemInterface, DataInterface
 
     public function expired() : bool
     {
-        return $this->expiry !== false && $this->expiry < \microtime();
+        return $this->expiry !== false && $this->expiry > \microtime();
     }
 
     /**
