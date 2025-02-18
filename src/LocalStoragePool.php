@@ -410,7 +410,7 @@ final class LocalStoragePool implements CacheItemPoolInterface, LoggerAwareInter
         $key = (string) $value;
 
         \assert(
-            \ctype_alpha( \str_replace( ['.', '-'], '', $key ) ),
+            \ctype_alnum( \str_replace( ['.', '-'], '', $key ) ),
             $this::class." keys must only contain ASCII characters, underscores and dashes. '".$value."' provided.",
         );
 
