@@ -222,10 +222,10 @@ final class LocalStoragePool implements CacheItemPoolInterface, LoggerAwareInter
         return true;
     }
 
-    public function hasChanges( bool $set = null ) : bool
+    public function hasChanges( true $set = null ) : bool
     {
-        if ( $set !== null ) {
-            $this->hasChanges = $set;
+        if ( $set ) {
+            $this->hasChanges = true;
         }
 
         return $this->hasChanges;

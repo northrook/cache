@@ -62,7 +62,7 @@ final class Item implements CacheItemInterface, DataInterface
      */
     public function set( mixed $value ) : static
     {
-        $this->storagePool->hasChanges( $this->value !== $value );
+        $this->storagePool->hasChanges( true );
         $this->value = $value;
 
         return $this;
@@ -120,7 +120,7 @@ final class Item implements CacheItemInterface, DataInterface
             );
         }
 
-        $this->storagePool->hasChanges( (bool) $this->expiry );
+        $this->storagePool->hasChanges( $this->expiry ? true : null );
 
         return $this;
     }
