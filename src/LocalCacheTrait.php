@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Cache;
 
 use Psr\Cache\CacheItemPoolInterface;
@@ -7,9 +9,6 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 use LogicException;
 
-/**
- * @property LoggerInterface $logger
- */
 trait LocalCacheTrait
 {
     /**
@@ -72,9 +71,12 @@ trait LocalCacheTrait
         }
     }
 
-    private function handleLocalCacheException( string $caller, string $key, Throwable $exception ) : void
-    {
-        if ( \method_exists( $this, 'logger' )
+    private function handleLocalCacheException(
+        string    $caller,
+        string    $key,
+        Throwable $exception,
+    ) : void {
+        if ( \property_exists( $this, 'logger' )
              && $this->logger instanceof LoggerInterface
         ) {
             $this->logger->error(
