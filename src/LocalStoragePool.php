@@ -319,7 +319,7 @@ final class LocalStoragePool implements CacheItemPoolInterface, LoggerAwareInter
                 ];
             }
 
-            if ( $item['expiry'] < \microtime() ) {
+            if ( $item['expiry'] > \time() ) {
                 $this->logger?->info( $this->name.': Item expired: '.$key );
                 $this->hasChanges = true;
                 unset( $this->data[$key] );

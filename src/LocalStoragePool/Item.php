@@ -13,7 +13,6 @@ use DateTimeImmutable;
 use DateTimeInterface;
 
 /**
- * @template ItemValue
  * @internal
  */
 final class Item implements CacheItemInterface, DataInterface
@@ -21,10 +20,10 @@ final class Item implements CacheItemInterface, DataInterface
     private readonly LocalStoragePool $storagePool;
 
     /**
-     * @param string         $key
-     * @param null|ItemValue $value
-     * @param bool           $isHit
-     * @param false|int      $expiry
+     * @param string    $key
+     * @param mixed     $value
+     * @param bool      $isHit
+     * @param false|int $expiry
      */
     public function __construct(
         protected string    $key,
@@ -44,7 +43,7 @@ final class Item implements CacheItemInterface, DataInterface
     }
 
     /**
-     * @return null|ItemValue
+     * @return mixed
      */
     public function get() : mixed
     {
@@ -57,7 +56,7 @@ final class Item implements CacheItemInterface, DataInterface
     }
 
     /**
-     * @param ItemValue $value
+     * @param mixed $value
      *
      * @return $this
      */
@@ -76,7 +75,7 @@ final class Item implements CacheItemInterface, DataInterface
 
     public function expired() : bool
     {
-        return $this->expiry !== false && $this->expiry > \microtime();
+        return $this->expiry && ( $this->expiry < \time() );
     }
 
     /**
