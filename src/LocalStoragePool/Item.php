@@ -85,40 +85,26 @@ final class Item implements CacheItemInterface, DataInterface
      */
     public function expiresAt( ?DateTimeInterface $expiration ) : static
     {
-        $this->expiry = $expiration !== null ? (int) $expiration->format( 'U.u' ) : false;
+        $this->expiry = $expiration ? (int) $expiration->format( 'U' ) : false;
 
         return $this;
     }
 
     /**
-     * @param mixed $time
+     * @param null|DateInterval|int $time
      *
      * @return $this
      */
-    public function expiresAfter( mixed $time ) : static
+    public function expiresAfter( int|DateInterval|null $time ) : static
     {
-        if ( ! $time ) {
-            $this->expiry = false;
-        }
-        elseif ( \is_int( $time ) ) {
-            $this->expiry = (int) ( $time + \microtime( true ) );
-        }
-        elseif ( $time instanceof DateInterval ) {
+        if ( $time instanceof DateInterval ) {
             $dateTime = DateTimeImmutable::createFromFormat( 'U', '0' )
                     ?: throw new InvalidArgumentException();
 
-            $current = (int) $dateTime->add( $time )->format( 'U.u' );
+            $time = (int) $dateTime->add( $time )->format( 'U' );
+        }
 
-            $this->expiry = (int) \microtime( true ) + $current;
-        }
-        else {
-            throw new InvalidArgumentException(
-                \sprintf(
-                    'Expiration date must be an integer, a DateInterval or null, "%s" given.',
-                    \get_debug_type( $time ),
-                ),
-            );
-        }
+        $this->expiry = ! $time ? false : $time + \time();
 
         $this->storagePool->hasChanges( $this->expiry ? true : null );
 
