@@ -42,6 +42,12 @@ final class LocalStoragePool implements CacheItemPoolInterface, LoggerAwareInter
 
     protected bool $hasChanges = false;
 
+    /** @var array<string, int> */
+    protected array $hit = [];
+
+    /** @var array<string, int> */
+    protected array $miss = [];
+
     /**
      * @param string      $filePath      Full path to the cache file
      * @param null|string $name          Derived from `$filePath` if unset
@@ -134,6 +140,14 @@ final class LocalStoragePool implements CacheItemPoolInterface, LoggerAwareInter
             $data->set( null );
         }
 
+        // Internal hit tracker
+        $this->hit[$key] = $hit ? ( $this->hit[$key] ?? 0 ) + 1 : 0;
+
+        // Internal miss tracker
+        if ( ! $hit ) {
+            $this->miss[$key] = ( $this->miss[$key] ?? 0 ) + 1;
+        }
+
         return $this->data[$key] = $data;
     }
 
@@ -168,6 +182,9 @@ final class LocalStoragePool implements CacheItemPoolInterface, LoggerAwareInter
     public function clear() : bool
     {
         $this->data       = [];
+        $this->hash       = null;
+        $this->hit        = [];
+        $this->miss       = [];
         $this->hasChanges = true;
         return true;
     }
@@ -180,7 +197,11 @@ final class LocalStoragePool implements CacheItemPoolInterface, LoggerAwareInter
     public function deleteItem( string|Stringable $key ) : bool
     {
         if ( $this->hasItem( $key ) ) {
-            unset( $this->data[(string) $key] );
+            unset(
+                $this->data[(string) $key],
+                $this->hit[(string) $key],
+                $this->miss[(string) $key],
+            );
             $this->hasChanges = true;
         }
         return $this->hasChanges;
@@ -294,6 +315,19 @@ final class LocalStoragePool implements CacheItemPoolInterface, LoggerAwareInter
     }
 
     // :: Util
+
+    /**
+     * Return an array of `[0] hit` and `[1] miss` arrays.
+     *
+     * @return array{int[],int[]}
+     */
+    public function getStats() : array
+    {
+        return [
+            $this->hit,
+            $this->miss,
+        ];
+    }
 
     protected function getDateTime() : DateTimeImmutable
     {
