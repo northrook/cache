@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cache;
 
 use Closure;
+use JetBrains\PhpStorm\Deprecated;
 
 const DISABLED  = -2;
 const EPHEMERAL = -1;
@@ -32,6 +33,7 @@ const FOREVER   = 0;
  * @return Type
  * @phpstan-return Type
  */
+#[Deprecated]
 function memoize(
     Closure|callable|array $callback,
     ?string                $key = null,

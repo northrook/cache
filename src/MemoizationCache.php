@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Cache;
 
+use JetBrains\PhpStorm\Deprecated;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache as Symfony;
 use Closure, LogicException;
 
+#[Deprecated]
 final class MemoizationCache extends CacheHandler
 {
     private static ?MemoizationCache $instance = null;
@@ -61,7 +63,7 @@ final class MemoizationCache extends CacheHandler
         \assert( $key, __METHOD__.'( .. $key .. ) cannot be empty.' );
 
         // If persistence is not requested, or if we are lacking a capable adapter
-        if ( EPHEMERAL === $persistence || ! $this->cacheAdapter ) {
+        if ( $persistence === EPHEMERAL || ! $this->cacheAdapter ) {
             return $this->inMemoryCache( $key, $callback );
         }
 

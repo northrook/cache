@@ -9,35 +9,73 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 use LogicException;
 
-trait LocalCacheTrait
+trait CachePoolTrait
 {
     /**
      * @var array<string, string>|CacheItemPoolInterface
      */
-    protected CacheItemPoolInterface|array $cache;
+    protected CacheItemPoolInterface|array $cache = [];
 
     /**
-     * Retrieve a cached value.
+     * Sets the {@see CacheItemPoolInterface}.
      *
-     * @param string $key
+     * - Will not override already-set Adapters
+     * - Will override the in-memory array cache
      *
-     * @return null|string
+     * @param CacheItemPoolInterface $cache `PSR-6` cache adapter
+     *
+     * @return void
      */
-    final protected function getCache( string $key ) : ?string
+    final public function setCacheAdapter( CacheItemPoolInterface $cache ) : void
     {
+        if ( $this->cache instanceof CacheItemPoolInterface ) {
+            return;
+        }
+        $this->cache = $cache;
+    }
+
+    /**
+     * @template Value
+     *
+     * @param string            $key
+     * @param ?callable():Value $callback
+     * @param null|mixed        $fallback
+     *
+     * @return mixed|Value
+     */
+    final protected function getCache(
+        string    $key,
+        ?callable $callback = null,
+        mixed     $fallback = null,
+    ) : mixed {
         if ( \is_array( $this->cache ) ) {
-            return $this->cache[$key] ?? null;
+            if ( isset( $this->cache[$key] ) ) {
+                return $this->cache[$key];
+            }
+
+            if ( ! $value = \is_callable( $callback ) ? $callback() : null ) {
+                return $fallback;
+            }
+
+            return $this->cache[$key] = $value;
         }
 
         try {
             if ( $this->cache->hasItem( $key ) ) {
                 return $this->cache->getItem( $key )->get();
             }
+
+            if ( ! $value = \is_callable( $callback ) ? $callback() : null ) {
+                return $fallback;
+            }
+
+            return $this->cache->getItem( $key )->set( $value )->get();
         }
         catch ( Throwable $exception ) {
             $this->handleLocalCacheException( 'getCache', $key, $exception );
         }
-        return null;
+
+        return $fallback;
     }
 
     final protected function setCache( string $key, string $value ) : void
@@ -68,6 +106,21 @@ trait LocalCacheTrait
         }
         catch ( Throwable $exception ) {
             $this->handleLocalCacheException( 'unsetCache', $key, $exception );
+        }
+    }
+
+    final protected function clearCache() : void
+    {
+        if ( \is_array( $this->cache ) ) {
+            $this->cache = [];
+            return;
+        }
+
+        try {
+            $this->cache->clear();
+        }
+        catch ( Throwable $exception ) {
+            $this->handleLocalCacheException( 'clearCache', $key, $exception );
         }
     }
 

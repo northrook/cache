@@ -23,8 +23,7 @@
     "php": ">=8.3",
     "psr/cache": "^3.0",
     "symfony/var-exporter": "@stable",
-    "northrook/core": "dev-main",
-    "symfony/cache-contracts": "^3.5"
+    "northrook/core": "dev-main"
   },
   "require-dev": {
     "northrook/dev": "dev-main",

@@ -2,22 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Cache\LocalStoragePool;
+namespace Cache\LocalStorage;
 
-use Cache\LocalStoragePool;
-use Core\Interface\DataInterface;
-use InvalidArgumentException;
+use Cache\LocalStorage;
 use Psr\Cache\CacheItemInterface;
-use DateInterval;
-use DateTimeImmutable;
-use DateTimeInterface;
+use DateInterval, DateTimeImmutable, InvalidArgumentException, DateTimeInterface;
 
 /**
  * @internal
  */
-final class Item implements CacheItemInterface, DataInterface
+final class Item implements CacheItemInterface
 {
-    private readonly LocalStoragePool $storagePool;
+    private readonly LocalStorage $storagePool;
 
     /**
      * @param string    $key
@@ -32,7 +28,7 @@ final class Item implements CacheItemInterface, DataInterface
         protected int|false $expiry = false,
     ) {}
 
-    public function setPool( LocalStoragePool $storagePool ) : void
+    public function setPool( LocalStorage $storagePool ) : void
     {
         $this->storagePool = $storagePool;
     }

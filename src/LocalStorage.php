@@ -4,55 +4,67 @@ declare(strict_types=1);
 
 namespace Cache;
 
-use Core\Interface\StorageInterface;
+use Cache\LocalStorage\Item;
+use Psr\Cache\{CacheItemInterface, CacheItemPoolInterface};
+use Psr\Log\{LoggerAwareInterface, LoggerInterface};
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\VarExporter\VarExporter;
-use Symfony\Component\VarExporter\Exception\ExceptionInterface;
-use DateTimeImmutable;
-use Throwable, LogicException, InvalidArgumentException, DateMalformedStringException;
+use Stringable, Throwable, InvalidArgumentException, LogicException;
+use DateTimeImmutable, DateMalformedStringException;
 
 /**
  * File cache designed for high-performance data persistence.
  *
- * - Data is stored as a local file, loaded lazily on request.
+ * - Data is stored as a local file, loaded lazily on demand.
  * - Write operations are deferred until the shutdown phase to minimize I/O overhead.
  * - Intended for application-generated data that can be regenerated if necessary.
  *
  *  Interoperable with:
- *  - `\Psr\SimpleCache\CacheInterface::get( $key )`, `set`, `has`, `delete`, `clear`
+ *  - `\Psr\SimpleCache\CacheInterface::get( $key )`
  *  - `\Symfony\Contracts\Cache\CacheInterface::get( $key, $callback )`
  *
  * @author Martin Nielsen <mn@northrook.com>
  */
-final class LocalStorage implements StorageInterface
+final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
 {
-    /** @var array<string, mixed> */
+    private ?LoggerInterface $logger = null;
+
+    /** @var array<string, array{'value':mixed,'expiry': false|int}|Item> */
     private array $data;
 
     private ?string $hash;
 
-    protected bool $locked = true;
+    private readonly string $filePath;
 
-    public readonly string $name;
+    private readonly string $name;
 
-    public readonly string $generator;
+    private readonly string $generator;
+
+    protected bool $hasChanges = false;
+
+    /** @var array<string, int> */
+    protected array $hit = [];
+
+    /** @var array<string, int> */
+    protected array $miss = [];
 
     /**
-     * @param string      $filePath
-     * @param null|string $name      `$filePath` basename as fallback
-     * @param null|string $generator `__CLASS__` as fallback
-     * @param bool        $autosave  [true] saves on `__destruct`
-     * @param bool        $validate  [true] validate against stored hash before saving
+     * @param string      $filePath      Full path to the cache file
+     * @param null|string $name          Derived from `$filePath` if unset
+     * @param null|string $generator     LocalStoragePool if unset
+     * @param bool        $autosave      [true] saves on `__destruct`
+     * @param bool        $validate      [true] validate against stored hash before saving
+     * @param false|int   $defaultExpiry [false] Never expires by default
      */
     public function __construct(
-        private readonly string $filePath,
-        ?string                 $name = null,
-        ?string                 $generator = null,
-        protected bool          $autosave = true,
-        protected bool          $validate = true,
+        string              $filePath,
+        string              $name = null,
+        string              $generator = null,
+        protected bool      $autosave = true,
+        protected bool      $validate = true,
+        protected false|int $defaultExpiry = false,
     ) {
-        $this->name      = $name      ?? \basename( $this->filePath );
-        $this->generator = $generator ?? __CLASS__;
+        $this->setup( $filePath, $name, $generator );
     }
 
     public function __destruct()
@@ -76,8 +88,8 @@ final class LocalStorage implements StorageInterface
         ?callable $callback = null,
         mixed     $fallback = null,
     ) : mixed {
-        if ( $this->has( $key ) ) {
-            return $this->data[$key];
+        if ( $this->hasItem( $key ) ) {
+            return $this->getItem( $key )->get();
         }
 
         if ( \is_callable( $callback ) ) {
@@ -88,219 +100,196 @@ final class LocalStorage implements StorageInterface
             return $fallback;
         }
 
-        $this->set( $key, $callback );
-
-        return $this->data[$key] ?? new LogicException();
+        return $this->getItem( $key )->set( $callback )->get();
     }
 
     /**
-     * Set the {@see LocalStorage::$data}.
+     * @param string $key
      *
-     * ⚠️ Overrides the current data.
-     *
-     * @param array<string, mixed> $data
-     * @param bool                 $areYouSure
-     *
-     * @return void
+     * @return array{'value':mixed,'expiry': false|int}|Item
      */
-    public function setData( array $data, bool $areYouSure = false ) : void
+    protected function loadItemData( string $key ) : Item|array
     {
-        if ( $areYouSure ) {
-            \assert(
-                // @phpstan-ignore-next-line
-                empty( \array_filter( \array_keys( $data ), fn( $v ) => ! \is_string( $v ) ) ),
-                $this->generator.' only accepts string keys.',
-            );
+        return $this->storage()->data[$key] ?? [
+            'value'  => null,
+            'expiry' => $this->defaultExpiry,
+        ];
+    }
 
-            $this->data   = $data;
-            $this->locked = false;
+    /**
+     * @param string|Stringable $key
+     *
+     * @return Item
+     */
+    public function getItem( string|Stringable $key ) : Item
+    {
+        $key  = $this->validateKey( $key );
+        $hit  = $this->hasItem( $key );
+        $data = $this->loadItemData( $key );
+
+        if ( ! $data instanceof Item ) {
+            $value  = $data['value'];
+            $expiry = $data['expiry'];
+
+            $data = new Item( $key, $value, $hit, $expiry );
+            $data->setPool( $this );
         }
 
-        throw new LogicException( 'Please read the '.__METHOD__.' comment before replacing the data array.' );
+        if ( $data->expired() ) {
+            $this->logger?->info( $this->name.': Item expired: '.$key );
+            $data->set( null );
+        }
+
+        // Internal hit tracker
+        $this->hit[$key] = $hit ? ( $this->hit[$key] ?? 0 ) + 1 : 0;
+
+        // Internal miss tracker
+        if ( ! $hit ) {
+            $this->miss[$key] = ( $this->miss[$key] ?? 0 ) + 1;
+        }
+
+        return $this->data[$key] = $data;
     }
 
     /**
-     * Merge with the current the {@see LocalStorage::$data}.
+     * @param string[]|Stringable[] $keys
      *
-     * @param array<string, mixed> $data
-     * @param bool                 $recursive
-     *
-     * @return void
+     * @return array<string, Item>
      */
-    public function addData( array $data, bool $recursive = false ) : void
+    public function getItems( array $keys = [] ) : iterable
     {
-        \assert(
-            // @phpstan-ignore-next-line
-            empty( \array_filter( \array_keys( $data ), fn( $v ) => ! \is_string( $v ) ) ),
-            $this->generator.' only accepts string keys.',
+        $items = [];
+
+        foreach ( $keys as $key ) {
+            $items[(string) $key] = $this->getItem( $key );
+        }
+        return $items;
+    }
+
+    /**
+     * @param string|Stringable $key
+     *
+     * @return bool
+     */
+    public function hasItem( string|Stringable $key ) : bool
+    {
+        return \array_key_exists(
+            $this->validateKey( $key ),
+            $this->storage()->data,
         );
-
-        if ( $recursive ) {
-            $this->data = \array_merge_recursive( $this->data, $data );
-        }
-        else {
-            $this->data = \array_merge( $this->data, $data );
-        }
-
-        $this->locked = false;
     }
 
-    /**
-     * Add a `value` by `key`.
-     *
-     * - Will not override existing `value`.
-     * - Changes won't be commited until a {@see LocalStorage::save()} action is taken.
-     *
-     * @param string $key
-     * @param mixed  $value
-     *
-     * @return bool
-     */
-    public function add( string $key, mixed $value ) : bool
+    public function clear() : bool
     {
-        if ( $this->has( $key ) ) {
-            return false;
-        }
-        $this->data[$key] = $value;
-        $this->locked     = false;
+        $this->data       = [];
+        $this->hash       = null;
+        $this->hit        = [];
+        $this->miss       = [];
+        $this->hasChanges = true;
         return true;
     }
 
     /**
-     * Manually set a `value` by `key`.
-     *
-     * - Will override current `value` if present.
-     * - Changes won't be commited until a {@see LocalStorage::save()} action is taken.
-     *
-     * @param string $key
-     * @param mixed  $value
+     * @param string|Stringable $key
      *
      * @return bool
      */
-    public function set( string $key, mixed $value ) : bool
+    public function deleteItem( string|Stringable $key ) : bool
     {
-        $this->data[$key] = $value;
-        $this->locked     = false;
+        if ( $this->hasItem( $key ) ) {
+            unset(
+                $this->data[(string) $key],
+                $this->hit[(string) $key],
+                $this->miss[(string) $key],
+            );
+            $this->hasChanges = true;
+        }
+        return $this->hasChanges;
+    }
+
+    /**
+     * @param string[]|Stringable[] $keys
+     *
+     * @return bool
+     */
+    public function deleteItems( array $keys ) : bool
+    {
+        foreach ( $keys as $key ) {
+            $this->deleteItem( $key );
+        }
+        return $this->hasChanges;
+    }
+
+    /**
+     * @param CacheItemInterface $item
+     *
+     * @return bool
+     */
+    public function save( CacheItemInterface $item ) : bool
+    {
+        $this->saveDeferred( $item );
+
+        return $this->commit();
+    }
+
+    public function saveDeferred( CacheItemInterface $item ) : bool
+    {
+        if ( ! $item instanceof Item ) {
+            throw new InvalidArgumentException( 'Only '.Item::class.' instances are supported.' );
+        }
+        $item->setPool( $this );
+        $this->storage()->data[$item->getKey()] = $item;
 
         return true;
     }
 
-    /**
-     * Check if a `key` is present in the {@see LocalStorage::$data} set.
-     *
-     * @param string $key
-     *
-     * @return bool
-     */
-    public function has( string $key ) : bool
+    public function hasChanges( true $set = null ) : bool
     {
-        return \array_key_exists( $key, $this->getData() );
-    }
-
-    /**
-     * Unsets a {@see LocalStorage::$data} value by `key`.
-     *
-     * - Changes won't be commited until a {@see LocalStorage::save()} action is taken.
-     *
-     * @param string $key
-     *
-     * @return bool
-     */
-    public function delete( string $key ) : bool
-    {
-        if ( ! isset( $this->data ) ) {
-            $this->initialize();
+        if ( $set ) {
+            $this->hasChanges = true;
         }
 
-        if ( isset( $this->data[$key] ) ) {
-            unset( $this->data[$key] );
-            $this->locked = false;
-            return true;
+        return $this->hasChanges;
+    }
+
+    public function commit( bool $force = false ) : bool
+    {
+        if ( $force ) {
+            $this->hasChanges = true;
         }
 
-        return false;
-    }
-
-    /**
-     * Returns the keys used to store {@see LocalStorage::$data}.
-     *
-     * @return string[]
-     */
-    public function getKeys() : array
-    {
-        return \array_keys( $this->getData() );
-    }
-
-    /**
-     * Returns an array of all {@see LocalStorage::$data}.
-     *
-     * @return array<string, mixed>
-     */
-    public function getAll() : array
-    {
-        return $this->getData();
-    }
-
-    public function hasChanges() : bool
-    {
-        return ! $this->locked;
-    }
-
-    /**
-     * Commits {@see LocalStorage::$data} to disk.
-     *
-     * It is recommended to perform this action after `shutdown`.
-     *
-     * - `autosave` is triggered on `__destruct`.
-     * - {@see VarExporter} handles serialization.
-     * - {@see Filesystem} handles disk operations.
-     * - `locked` is ignored when `autosave` is disabled.
-     * - Will check against stored `hash` before saving.
-     * - Always `locked` before commiting.
-     *
-     * @return bool
-     *
-     * @throws InvalidArgumentException on `VarExporter` failures
-     * @throws LogicException           on `Filesystem` or `DateTime` failures
-     */
-    public function commit() : bool
-    {
-        if ( $this->autosave && ( empty( $this->data ) || $this->locked ) ) {
+        // Do not attempt to commit anything if nothing has changed
+        if ( $this->autosave && ( empty( $this->data ) || $this->hasChanges === false ) ) {
+            $this->logger?->info(
+                '{storage} has {changes} to commit.',
+                [
+                    'storage' => $this->name,
+                    'changes' => $force ? 'been forced to' : 'changes',
+                ],
+            );
             return false;
         }
 
-        $this->locked = true;
-
-        try {
-            $dataExport = VarExporter::export( $this->data ?? [] );
-        }
-        catch ( ExceptionInterface $e ) {
-            throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
-        }
-
+        $dataExport      = $this->exportData();
         $storageDataHash = \hash( algo : 'xxh3', data : $dataExport );
 
         if ( $this->validate && $storageDataHash === ( $this->hash ?? null ) ) {
+            $this->logger?->info( $this->name.': Matches hashes, no changes to commit.' );
             return false;
         }
 
-        try {
-            $dateTime = new DateTimeImmutable( timezone : \timezone_open( 'UTC' ) ?: null );
-        }
-        catch ( DateMalformedStringException $e ) {
-            throw new LogicException( $e->getMessage(), $e->getCode(), $e );
-        }
+        $dateTime = $this->getDateTime();
 
-        $timestamp = $dateTime->getTimestamp();
-        $date      = $dateTime->format( 'Y-m-d H:i:s e' );
+        $timestamp          = $dateTime->getTimestamp();
+        $formattedTimestamp = $dateTime->format( 'Y-m-d H:i:s e' );
 
         $localStorage = <<<PHP
             <?php
             
-            /*--------------------------------------------------------{$timestamp}-
+            /*------------------------------------------------------%{$timestamp}%-
             
                Name      : {$this->name}
-               Generated : {$date}
+               Generated : {$formattedTimestamp}
             
                This file is generated by {$this->generator}.
             
@@ -316,6 +305,7 @@ final class LocalStorage implements StorageInterface
 
         try {
             ( new Filesystem() )->dumpFile( $this->filePath, $localStorage.PHP_EOL );
+            $this->logger?->info( $this->name.': Changes committed.' );
         }
         catch ( Throwable $e ) {
             throw new LogicException( $e->getMessage(), $e->getCode(), $e );
@@ -324,38 +314,152 @@ final class LocalStorage implements StorageInterface
         return true;
     }
 
-    public function clear() : bool
+    // :: Util
+
+    /**
+     * Return an array of `[0] hit` and `[1] miss` arrays.
+     *
+     * @return array{int[],int[]}
+     */
+    public function getStats() : array
     {
-        $this->data   = [];
-        $this->locked = false;
-        return true;
+        return [
+            $this->hit,
+            $this->miss,
+        ];
+    }
+
+    protected function getDateTime() : DateTimeImmutable
+    {
+        // TODO: [low] static or property
+        try {
+            return new DateTimeImmutable( timezone : \timezone_open( 'UTC' ) ?: null );
+        }
+        catch ( DateMalformedStringException $e ) {
+            throw new LogicException( $e->getMessage(), $e->getCode(), $e );
+        }
     }
 
     /**
-     * @return array<string, mixed>
+     * @return string
      */
-    private function getData() : array
+    protected function exportData() : string
     {
-        if ( ! isset( $this->data ) ) {
-            $this->initialize();
+        foreach ( $this->storage()->data as $key => $item ) {
+            if ( $item instanceof Item ) {
+                $item = [
+                    'value'  => $item->get(),
+                    'expiry' => $item->expiry(),
+                ];
+            }
+
+            if ( $item['expiry'] > \time() ) {
+                $this->logger?->info( $this->name.': Item expired: '.$key );
+                $this->hasChanges = true;
+                unset( $this->data[$key] );
+
+                continue;
+            }
+
+            $this->data[$key] = $item;
         }
 
-        return $this->data;
+        try {
+            return VarExporter::export( $this->data );
+        }
+        catch ( Throwable $e ) {
+            throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
+        }
     }
 
-    private function initialize() : void
+    public function setLogger( LoggerInterface $logger ) : void
     {
+        $this->logger?->warning( 'Logger already set.' );
+
+        $this->logger ??= $logger;
+    }
+
+    /**
+     * Internal logging helper.
+     *
+     * @internal
+     *
+     * @param string               $message
+     * @param array<string, mixed> $context
+     */
+    protected function log(
+        string $message,
+        array  $context = [],
+    ) : void {
+        if ( $this->logger ) {
+            $this->logger->warning( $message, $context );
+        }
+        else {
+            $replace = [];
+
+            foreach ( $context as $k => $v ) {
+                if ( \is_scalar( $v ) ) {
+                    $replace['{'.$k.'}'] = $v;
+                }
+            }
+            @\trigger_error( \strtr( $message, $replace ), E_USER_WARNING );
+        }
+    }
+
+    // .. Internal
+
+    /**
+     * @internal
+     * @return self
+     */
+    protected function storage() : self
+    {
+        if ( isset( $this->data ) ) {
+            return $this;
+        }
+
         if ( ! \file_exists( $this->filePath ) ) {
             $this->data = [];
             $this->hash = 'initial';
-            return;
+            return $this;
         }
 
         try {
             [$this->hash, $this->data] = include $this->filePath;
         }
-        catch ( ExceptionInterface $e ) {
+        catch ( Throwable $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
         }
+
+        return $this;
+    }
+
+    /**
+     * @param string|Stringable $value
+     *
+     * @return string
+     */
+    private function validateKey( string|Stringable $value ) : string
+    {
+        $key = (string) $value;
+
+        \assert(
+            \ctype_alnum( \str_replace( ['.', '-'], '', $key ) ),
+            $this::class." keys must only contain ASCII characters, underscores and dashes. '".$value."' provided.",
+        );
+
+        return \strtolower( $key );
+    }
+
+    private function setup( string $filePath, ?string $name, ?string $generator ) : void
+    {
+        $this->filePath  = $filePath;
+        $this->generator = $generator ?? __CLASS__;
+
+        if ( ! $name ) {
+            $name = \basename( $this->filePath );
+            $name = \strrchr( $name, '.', true ) ?: $name;
+        }
+        $this->name = $name;
     }
 }
