@@ -76,6 +76,22 @@ trait CachePoolTrait
         return $fallback;
     }
 
+    final protected function hasCache( string $key ) : bool
+    {
+        if ( \is_array( $this->cache ) ) {
+            return isset( $this->cache[$key] );
+        }
+
+        try {
+            return $this->cache->hasItem( $key );
+        }
+        catch ( Throwable $exception ) {
+            $this->handleLocalCacheException( __METHOD__, $key, $exception );
+        }
+
+        return false;
+    }
+
     final protected function setCache( string $key, string $value ) : void
     {
         if ( \is_array( $this->cache ) ) {
@@ -122,6 +138,15 @@ trait CachePoolTrait
         }
     }
 
+    /**
+     * @param string    $caller
+     * @param string    $key
+     * @param Throwable $exception
+     *
+     * @return void
+     *
+     * @throws LogicException
+     */
     private function handleLocalCacheException(
         string    $caller,
         string    $key,
