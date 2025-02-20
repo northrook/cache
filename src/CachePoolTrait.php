@@ -70,7 +70,7 @@ trait CachePoolTrait
             return $this->cache->getItem( $key )->set( $value )->get();
         }
         catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( 'getCache', $key, $exception );
+            $this->handleLocalCacheException( __METHOD__, $key, $exception );
         }
 
         return $fallback;
@@ -88,7 +88,7 @@ trait CachePoolTrait
             $item->set( $value );
         }
         catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( 'setCache', $key, $exception );
+            $this->handleLocalCacheException( __METHOD__, $key, $exception );
         }
     }
 
@@ -103,7 +103,7 @@ trait CachePoolTrait
             $this->cache->deleteItem( $key );
         }
         catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( 'unsetCache', $key, $exception );
+            $this->handleLocalCacheException( __METHOD__, $key, $exception );
         }
     }
 
@@ -118,7 +118,7 @@ trait CachePoolTrait
             $this->cache->clear();
         }
         catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( 'clearCache', $key, $exception );
+            $this->handleLocalCacheException( __METHOD__, $key, $exception );
         }
     }
 
