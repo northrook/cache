@@ -11,9 +11,7 @@ use LogicException;
 
 trait CachePoolTrait
 {
-    /**
-     * @var array<string, string>|CacheItemPoolInterface
-     */
+    /** @var array<string, mixed>|CacheItemPoolInterface */
     protected CacheItemPoolInterface|array $cache = [];
 
     /**
