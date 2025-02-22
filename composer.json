@@ -6,10 +6,7 @@
   "autoload": {
     "psr-4": {
       "Cache\\": "src"
-    },
-    "files": [
-      "src/cache.php"
-    ]
+    }
   },
   "authors": [
     {
@@ -22,8 +19,7 @@
   "require": {
     "php": ">=8.3",
     "psr/cache": "^3.0",
-    "symfony/var-exporter": "@stable",
-    "northrook/core": "dev-main"
+    "symfony/var-exporter": "@stable"
   },
   "require-dev": {
     "northrook/dev": "dev-main",
