@@ -1,11 +1,13 @@
 ### Editor
 /.ide
 /.idea
+/.dev
 *.code-workspace
 
 ### Dev
 /var
 /vendor
+/src/RuntimeCache.php
 /index.php
 /*.lock
 /*.cache
