@@ -38,6 +38,7 @@ trait CachePoolTrait
      * @param string            $key
      * @param ?callable():Value $callback
      * @param null|mixed        $fallback
+     * @param bool              $defer
      *
      * @return mixed|Value
      */
@@ -45,35 +46,33 @@ trait CachePoolTrait
         string    $key,
         ?callable $callback = null,
         mixed     $fallback = null,
+        bool      $defer = false,
     ) : mixed {
-        if ( \is_array( $this->cache ) ) {
-            if ( isset( $this->cache[$key] ) ) {
+        $arrayCache = \is_array( $this->cache );
+
+        if ( $this->hasCache( $key ) ) {
+            if ( $arrayCache ) {
                 return $this->cache[$key];
             }
-
-            if ( ! $value = \is_callable( $callback ) ? $callback() : null ) {
-                return $fallback;
+            try {
+                return $this->cache->getItem( $key )->get();
             }
+            catch ( Throwable $exception ) {
+                $this->handleLocalCacheException( __METHOD__, $key, $exception );
+            }
+        }
 
+        if ( ! $value = \is_callable( $callback ) ? $callback() : null ) {
+            return $fallback;
+        }
+
+        if ( $arrayCache ) {
             return $this->cache[$key] = $value;
         }
 
-        try {
-            if ( $this->cache->hasItem( $key ) ) {
-                return $this->cache->getItem( $key )->get();
-            }
+        $this->setCache( $key, $value, $defer );
 
-            if ( ! $value = \is_callable( $callback ) ? $callback() : null ) {
-                return $fallback;
-            }
-
-            return $this->cache->getItem( $key )->set( $value )->get();
-        }
-        catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( __METHOD__, $key, $exception );
-        }
-
-        return $fallback;
+        return $value;
     }
 
     final protected function hasCache( string $key ) : bool
@@ -92,7 +91,7 @@ trait CachePoolTrait
         return false;
     }
 
-    final protected function setCache( string $key, string $value ) : void
+    final protected function setCache( string $key, mixed $value, bool $defer = false ) : void
     {
         if ( \is_array( $this->cache ) ) {
             $this->cache[$key] = $value;
@@ -102,6 +101,12 @@ trait CachePoolTrait
         try {
             $item = $this->cache->getItem( $key );
             $item->set( $value );
+            if ( $defer ) {
+                $this->cache->saveDeferred( $item );
+            }
+            else {
+                $this->cache->save( $item );
+            }
         }
         catch ( Throwable $exception ) {
             $this->handleLocalCacheException( __METHOD__, $key, $exception );
