@@ -43,7 +43,7 @@ trait CachePoolTrait
             $this::class."->cacheKeyPrefix must only contain ASCII characters, underscores and dashes. '".$cacheKeyPrefix."' provided.",
         );
 
-        $this->cacheKeyPrefix ??= \trim( $cacheKeyPrefix, '-.' );
+        $this->cacheKeyPrefix ??= \trim( $cacheKeyPrefix, '-.' ).'.';
     }
 
     /**
@@ -66,7 +66,7 @@ trait CachePoolTrait
             return $fallback;
         }
 
-        $key = $this->cacheKeyPrefix ? "{$this->cacheKeyPrefix}.{$key}" : $key;
+        $key = $this->resolveCacheItemKey( $key );
 
         $arrayCache = \is_array( $this->cache );
 
@@ -101,7 +101,7 @@ trait CachePoolTrait
             return false;
         }
 
-        $key = $this->cacheKeyPrefix ? "{$this->cacheKeyPrefix}.{$key}" : $key;
+        $key = $this->resolveCacheItemKey( $key );
 
         if ( \is_array( $this->cache ) ) {
             return isset( $this->cache[$key] );
@@ -123,7 +123,7 @@ trait CachePoolTrait
             throw new InvalidArgumentException( 'Cache key must not be empty.' );
         }
 
-        $key = $this->cacheKeyPrefix ? "{$this->cacheKeyPrefix}.{$key}" : $key;
+        $key = $this->resolveCacheItemKey( $key );
 
         if ( \is_array( $this->cache ) ) {
             $this->cache[$key] = $value;
@@ -151,7 +151,7 @@ trait CachePoolTrait
             return;
         }
 
-        $key = $this->cacheKeyPrefix ? "{$this->cacheKeyPrefix}.{$key}" : $key;
+        $key = $this->resolveCacheItemKey( $key );
 
         if ( \is_array( $this->cache ) ) {
             unset( $this->cache[$key] );
@@ -179,6 +179,15 @@ trait CachePoolTrait
         catch ( Throwable $exception ) {
             $this->handleLocalCacheException( __METHOD__, $key, $exception );
         }
+    }
+
+    private function resolveCacheItemKey( string $key ) : string
+    {
+        if ( ! $this->cacheKeyPrefix || \str_starts_with( $key, $this->cacheKeyPrefix ) ) {
+            return $key;
+        }
+
+        return $this->cacheKeyPrefix.$key;
     }
 
     /**
