@@ -30,7 +30,7 @@ final class Item implements CacheItemInterface
 
     public function setPool( LocalStorage $storagePool ) : void
     {
-        $this->storagePool = $storagePool;
+        $this->storagePool ??= $storagePool;
     }
 
     public function getKey() : string

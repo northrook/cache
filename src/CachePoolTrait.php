@@ -8,11 +8,14 @@ use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Throwable;
 use LogicException;
+use InvalidArgumentException;
 
 trait CachePoolTrait
 {
     /** @var array<string, mixed>|CacheItemPoolInterface */
     protected CacheItemPoolInterface|array $cache = [];
+
+    protected ?string $cacheKeyPrefix = null;
 
     /**
      * Sets the {@see CacheItemPoolInterface}.
@@ -20,16 +23,27 @@ trait CachePoolTrait
      * - Will not override already-set Adapters
      * - Will override the in-memory array cache
      *
-     * @param CacheItemPoolInterface $cache `PSR-6` cache adapter
+     * @param ?CacheItemPoolInterface $cache          `PSR-6` cache adapter
+     * @param ?string                 $cacheKeyPrefix
      *
      * @return void
      */
-    final public function setCacheAdapter( CacheItemPoolInterface $cache ) : void
-    {
+    final public function setCacheAdapter(
+        ?CacheItemPoolInterface $cache,
+        ?string                 $cacheKeyPrefix = null,
+    ) : void {
         if ( $this->cache instanceof CacheItemPoolInterface ) {
             return;
         }
-        $this->cache = $cache;
+
+        $this->cache = $cache ?? [];
+
+        \assert(
+            \ctype_alnum( \str_replace( ['.', '-'], '', $cacheKeyPrefix ) ),
+            $this::class."->cacheKeyPrefix must only contain ASCII characters, underscores and dashes. '".$cacheKeyPrefix."' provided.",
+        );
+
+        $this->cacheKeyPrefix ??= \trim( $cacheKeyPrefix, '-.' );
     }
 
     /**
@@ -51,6 +65,8 @@ trait CachePoolTrait
         if ( ! $key ) {
             return $fallback;
         }
+
+        $key = $this->cacheKeyPrefix ? "{$this->cacheKeyPrefix}.{$key}" : $key;
 
         $arrayCache = \is_array( $this->cache );
 
@@ -85,6 +101,8 @@ trait CachePoolTrait
             return false;
         }
 
+        $key = $this->cacheKeyPrefix ? "{$this->cacheKeyPrefix}.{$key}" : $key;
+
         if ( \is_array( $this->cache ) ) {
             return isset( $this->cache[$key] );
         }
@@ -101,6 +119,12 @@ trait CachePoolTrait
 
     protected function setCache( string $key, mixed $value, bool $defer = false ) : void
     {
+        if ( ! $key ) {
+            throw new InvalidArgumentException( 'Cache key must not be empty.' );
+        }
+
+        $key = $this->cacheKeyPrefix ? "{$this->cacheKeyPrefix}.{$key}" : $key;
+
         if ( \is_array( $this->cache ) ) {
             $this->cache[$key] = $value;
             return;
@@ -123,6 +147,12 @@ trait CachePoolTrait
 
     protected function unsetCache( string $key ) : void
     {
+        if ( ! $key ) {
+            return;
+        }
+
+        $key = $this->cacheKeyPrefix ? "{$this->cacheKeyPrefix}.{$key}" : $key;
+
         if ( \is_array( $this->cache ) ) {
             unset( $this->cache[$key] );
             return;
