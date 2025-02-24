@@ -21,14 +21,14 @@ trait CachePoolTrait
      * - Will not override already-set Adapters
      * - Will override the in-memory array cache
      *
-     * @param ?CacheItemPoolInterface $cache          `PSR-6` cache adapter
-     * @param ?string                 $cacheKeyPrefix
+     * @param ?CacheItemPoolInterface $cache  `PSR-6` cache adapter
+     * @param ?string                 $prefix [optional] `prefix.key`
      *
      * @return void
      */
     final public function setCacheAdapter(
         ?CacheItemPoolInterface $cache,
-        ?string                 $cacheKeyPrefix = null,
+        ?string                 $prefix = null,
     ) : void {
         if ( $this->cache instanceof CacheItemPoolInterface ) {
             return;
@@ -37,11 +37,11 @@ trait CachePoolTrait
         $this->cache = $cache ?? [];
 
         \assert(
-            \ctype_alnum( \str_replace( ['.', '-'], '', $cacheKeyPrefix ) ),
-            $this::class."->cacheKeyPrefix must only contain ASCII characters, underscores and dashes. '".$cacheKeyPrefix."' provided.",
+            \ctype_alnum( \str_replace( ['.', '-'], '', $prefix ) ),
+            $this::class."->cacheKeyPrefix must only contain ASCII characters, underscores and dashes. '".$prefix."' provided.",
         );
 
-        $this->cacheKeyPrefix ??= \trim( $cacheKeyPrefix, '-.' ).'.';
+        $this->cacheKeyPrefix ??= \trim( $prefix, '-.' ).'.';
     }
 
     /**
