@@ -35,19 +35,23 @@ trait CachePoolTrait
     /**
      * @template Value
      *
-     * @param string            $key
+     * @param ?string           $key
      * @param ?callable():Value $callback
      * @param null|mixed        $fallback
      * @param bool              $defer
      *
      * @return mixed|Value
      */
-    final protected function getCache(
-        string    $key,
+    protected function getCache(
+        ?string   $key,
         ?callable $callback = null,
         mixed     $fallback = null,
         bool      $defer = false,
     ) : mixed {
+        if ( ! $key ) {
+            return $fallback;
+        }
+
         $arrayCache = \is_array( $this->cache );
 
         if ( $this->hasCache( $key ) ) {
@@ -75,8 +79,12 @@ trait CachePoolTrait
         return $value;
     }
 
-    final protected function hasCache( string $key ) : bool
+    protected function hasCache( ?string $key ) : bool
     {
+        if ( ! $key ) {
+            return false;
+        }
+
         if ( \is_array( $this->cache ) ) {
             return isset( $this->cache[$key] );
         }
@@ -91,7 +99,7 @@ trait CachePoolTrait
         return false;
     }
 
-    final protected function setCache( string $key, mixed $value, bool $defer = false ) : void
+    protected function setCache( string $key, mixed $value, bool $defer = false ) : void
     {
         if ( \is_array( $this->cache ) ) {
             $this->cache[$key] = $value;
@@ -113,7 +121,7 @@ trait CachePoolTrait
         }
     }
 
-    final protected function unsetCache( string $key ) : void
+    protected function unsetCache( string $key ) : void
     {
         if ( \is_array( $this->cache ) ) {
             unset( $this->cache[$key] );
@@ -128,7 +136,7 @@ trait CachePoolTrait
         }
     }
 
-    final protected function clearCache() : void
+    protected function clearCache() : void
     {
         if ( \is_array( $this->cache ) ) {
             $this->cache = [];
