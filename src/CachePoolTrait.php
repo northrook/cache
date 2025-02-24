@@ -6,9 +6,7 @@ namespace Cache;
 
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
-use Throwable;
-use LogicException;
-use InvalidArgumentException;
+use Throwable, LogicException, InvalidArgumentException;
 
 trait CachePoolTrait
 {
