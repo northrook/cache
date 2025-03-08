@@ -13,7 +13,11 @@ trait CachePoolTrait
     /** @var array<string, mixed>|CacheItemPoolInterface */
     protected CacheItemPoolInterface|array $cache = [];
 
-    protected ?string $cacheKeyPrefix = null;
+    private ?string $cacheKeyPrefix = null;
+
+    protected ?int $cacheExpiration = AUTO;
+
+    protected bool $cacheDeferCommit = false;
 
     /**
      * Sets the {@see CacheItemPoolInterface}.
@@ -21,14 +25,18 @@ trait CachePoolTrait
      * - Will not override already-set Adapters
      * - Will override the in-memory array cache
      *
-     * @param ?CacheItemPoolInterface $cache  `PSR-6` cache adapter
-     * @param ?string                 $prefix [optional] `prefix.key`
+     * @param ?CacheItemPoolInterface $cache      `PSR-6` cache adapter
+     * @param ?string                 $prefix     [optional] `prefix.key`
+     * @param bool                    $defer
+     * @param ?int                    $expiration
      *
      * @return void
      */
     final public function setCacheAdapter(
         ?CacheItemPoolInterface $cache,
         ?string                 $prefix = null,
+        bool                    $defer = false,
+        ?int                    $expiration = AUTO,
     ) : void {
         if ( $this->cache instanceof CacheItemPoolInterface ) {
             return;
@@ -41,7 +49,9 @@ trait CachePoolTrait
             $this::class."->cacheKeyPrefix must only contain ASCII characters, underscores and dashes. '".$prefix."' provided.",
         );
 
-        $this->cacheKeyPrefix ??= \trim( $prefix, '-.' ).'.';
+        $this->cacheKeyPrefix  ??= \trim( $prefix, '-.' ).'.';
+        $this->cacheExpiration ??= $expiration;
+        $this->cacheDeferCommit = $defer;
     }
 
     /**
@@ -50,7 +60,8 @@ trait CachePoolTrait
      * @param ?string           $key
      * @param ?callable():Value $callback
      * @param null|mixed        $fallback
-     * @param bool              $defer
+     * @param ?int              $expiration
+     * @param ?bool             $defer
      *
      * @return mixed|Value
      */
@@ -58,7 +69,8 @@ trait CachePoolTrait
         ?string   $key,
         ?callable $callback = null,
         mixed     $fallback = null,
-        bool      $defer = false,
+        ?int      $expiration = AUTO,
+        ?bool     $defer = AUTO,
     ) : mixed {
         if ( ! $key ) {
             return $fallback;
@@ -88,7 +100,7 @@ trait CachePoolTrait
             return $this->cache[$key] = $value;
         }
 
-        $this->setCache( $key, $value, $defer );
+        $this->setCache( $key, $value, $expiration, $defer );
 
         return $value;
     }
@@ -115,8 +127,12 @@ trait CachePoolTrait
         return false;
     }
 
-    protected function setCache( string $key, mixed $value, bool $defer = false ) : void
-    {
+    protected function setCache(
+        string $key,
+        mixed  $value,
+        ?int   $expiration = AUTO,
+        ?bool  $defer = AUTO,
+    ) : void {
         if ( ! $key ) {
             throw new InvalidArgumentException( 'Cache key must not be empty.' );
         }
@@ -130,8 +146,10 @@ trait CachePoolTrait
 
         try {
             $item = $this->cache->getItem( $key );
-            $item->set( $value );
-            if ( $defer ) {
+            $item
+                ->expiresAfter( $expiration ?? $this->cacheExpiration )
+                ->set( $value );
+            if ( $defer ?? $this->cacheDeferCommit ) {
                 $this->cache->saveDeferred( $item );
             }
             else {
