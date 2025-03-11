@@ -7,6 +7,7 @@ namespace Cache;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Throwable, LogicException, InvalidArgumentException;
+use const Support\{AUTO, CACHE_AUTO};
 
 trait CachePoolTrait
 {
@@ -15,7 +16,7 @@ trait CachePoolTrait
 
     private ?string $cacheKeyPrefix = null;
 
-    protected ?int $cacheExpiration = AUTO;
+    protected ?int $cacheExpiration = CACHE_AUTO;
 
     protected bool $cacheDeferCommit = false;
 
@@ -36,7 +37,7 @@ trait CachePoolTrait
         ?CacheItemPoolInterface $cache,
         ?string                 $prefix = null,
         bool                    $defer = false,
-        ?int                    $expiration = AUTO,
+        ?int                    $expiration = CACHE_AUTO,
     ) : void {
         if ( $this->cache instanceof CacheItemPoolInterface ) {
             return;
@@ -69,7 +70,7 @@ trait CachePoolTrait
         ?string   $key,
         ?callable $callback = null,
         mixed     $fallback = null,
-        ?int      $expiration = AUTO,
+        ?int      $expiration = CACHE_AUTO,
         ?bool     $defer = AUTO,
     ) : mixed {
         if ( ! $key ) {
@@ -88,7 +89,7 @@ trait CachePoolTrait
                 return $this->cache->getItem( $key )->get();
             }
             catch ( Throwable $exception ) {
-                $this->handleLocalCacheException( __METHOD__, $key, $exception );
+                $this->handleCacheException( __METHOD__, $key, $exception );
             }
         }
 
@@ -121,7 +122,7 @@ trait CachePoolTrait
             return $this->cache->hasItem( $key );
         }
         catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( __METHOD__, $key, $exception );
+            $this->handleCacheException( __METHOD__, $key, $exception );
         }
 
         return false;
@@ -157,7 +158,7 @@ trait CachePoolTrait
             }
         }
         catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( __METHOD__, $key, $exception );
+            $this->handleCacheException( __METHOD__, $key, $exception );
         }
     }
 
@@ -178,7 +179,7 @@ trait CachePoolTrait
             $this->cache->deleteItem( $key );
         }
         catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( __METHOD__, $key, $exception );
+            $this->handleCacheException( __METHOD__, $key, $exception );
         }
     }
 
@@ -193,7 +194,7 @@ trait CachePoolTrait
             $this->cache->clear();
         }
         catch ( Throwable $exception ) {
-            $this->handleLocalCacheException( __METHOD__, $key, $exception );
+            $this->handleCacheException( __METHOD__, $key, $exception );
         }
     }
 
@@ -215,7 +216,7 @@ trait CachePoolTrait
      *
      * @throws LogicException
      */
-    private function handleLocalCacheException(
+    private function handleCacheException(
         string    $caller,
         string    $key,
         Throwable $exception,

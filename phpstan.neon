@@ -2,6 +2,7 @@ parameters:
 	level: 9
 	paths:
 		- src
+		- vendor
 	treatPhpDocTypesAsCertain: false
 	reportUnmatchedIgnoredErrors: false
 	ignoreErrors:
