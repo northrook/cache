@@ -33,7 +33,7 @@ trait CachePoolTrait
      *
      * @return void
      */
-    final public function setCacheAdapter(
+    protected function assignCacheAdapter(
         ?CacheItemPoolInterface $cache,
         ?string                 $prefix = null,
         bool                    $defer = false,
