@@ -20,19 +20,19 @@ trait SettableCachePoolTrait
      * - Will not override already-set Adapters
      * - Will override the in-memory array cache
      *
-     * @param ?CacheItemPoolInterface $cache      `PSR-6` cache adapter
-     * @param ?string                 $prefix     [optional] `prefix.key`
-     * @param bool                    $defer
-     * @param ?int                    $expiration
+     * @param null|CacheItemPoolInterface $adapter    `PSR-6` cache adapter
+     * @param null|string                 $prefix     [optional] `prefix.key`
+     * @param bool                        $defer
+     * @param null|int                    $expiration
      *
      * @return void
      */
     public function setCacheAdapter(
-        ?CacheItemPoolInterface $cache,
+        ?CacheItemPoolInterface $adapter,
         ?string                 $prefix = null,
         bool                    $defer = false,
         ?int                    $expiration = CACHE_AUTO,
     ) : void {
-        $this->assignCacheAdapter( $cache, $prefix, $defer, $expiration );
+        $this->assignCacheAdapter( $adapter, $prefix, $defer, $expiration );
     }
 }

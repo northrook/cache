@@ -26,24 +26,24 @@ trait CachePoolTrait
      * - Will not override already-set Adapters
      * - Will override the in-memory array cache
      *
-     * @param ?CacheItemPoolInterface $cache      `PSR-6` cache adapter
-     * @param ?string                 $prefix     [optional] `prefix.key`
-     * @param bool                    $defer
-     * @param ?int                    $expiration
+     * @param null|array|CacheItemPoolInterface $adapter    `PSR-6` cache adapter
+     * @param null|string                       $prefix     [optional] `prefix.key`
+     * @param bool                              $defer
+     * @param null|int                          $expiration
      *
      * @return void
      */
     protected function assignCacheAdapter(
-        ?CacheItemPoolInterface $cache,
-        ?string                 $prefix = null,
-        bool                    $defer = false,
-        ?int                    $expiration = CACHE_AUTO,
+        null|array|CacheItemPoolInterface $adapter,
+        ?string                           $prefix = null,
+        bool                              $defer = false,
+        ?int                              $expiration = CACHE_AUTO,
     ) : void {
         if ( $this->cache instanceof CacheItemPoolInterface ) {
             return;
         }
 
-        $this->cache = $cache ?? [];
+        $this->cache = $adapter ?? [];
 
         \assert(
             \ctype_alnum( \str_replace( ['.', '-'], '', $prefix ) ),
