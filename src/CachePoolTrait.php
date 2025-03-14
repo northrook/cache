@@ -188,6 +188,19 @@ trait CachePoolTrait
         }
     }
 
+    protected function commitCache() : void
+    {
+        if ( \is_array( $this->cache ) ) {
+            return;
+        }
+        try {
+            $this->cache->commit();
+        }
+        catch ( Throwable $exception ) {
+            $this->handleCacheException( __METHOD__, 'commit', $exception );
+        }
+    }
+
     protected function clearCache() : void
     {
         if ( \is_array( $this->cache ) ) {
