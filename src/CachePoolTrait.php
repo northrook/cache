@@ -14,7 +14,7 @@ trait CachePoolTrait
     /** @var array<string, mixed>|CacheItemPoolInterface */
     protected CacheItemPoolInterface|array $cache = [];
 
-    private ?string $cacheKeyPrefix = null;
+    private readonly ?string $cacheKeyPrefix;
 
     protected ?int $cacheExpiration = CACHE_AUTO;
 
@@ -44,15 +44,20 @@ trait CachePoolTrait
         }
 
         $this->cache = $adapter ?? [];
-
-        \assert(
-            \ctype_alnum( \str_replace( ['.', '-'], '', $prefix ) ),
-            $this::class."->cacheKeyPrefix must only contain ASCII characters, underscores and dashes. '".$prefix."' provided.",
-        );
-
-        $this->cacheKeyPrefix  ??= \trim( $prefix, '-.' ).'.';
         $this->cacheExpiration ??= $expiration;
         $this->cacheDeferCommit = $defer;
+
+        if ( $prefix ) {
+            \assert(
+                \ctype_alnum( \str_replace( ['.', '-'], '', $prefix ) ),
+                $this::class."->cacheKeyPrefix must only contain ASCII characters, underscores and dashes. '".$prefix."' provided.",
+            );
+
+            $this->cacheKeyPrefix = \trim( $prefix, '-.' ).'.';
+        }
+        else {
+            $this->cacheKeyPrefix = null;
+        }
     }
 
     /**
