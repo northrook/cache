@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace Cache;
 
 use Cache\LocalStorage\Item;
-use Psr\Cache\{CacheItemInterface, CacheItemPoolInterface};
-use Psr\Log\{LoggerAwareInterface, LoggerInterface};
+use Psr\Cache\{CacheItemInterface};
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\VarExporter\VarExporter;
 use Stringable, Throwable, InvalidArgumentException, LogicException;
@@ -25,18 +24,14 @@ use DateTimeImmutable, DateMalformedStringException;
  *
  * @author Martin Nielsen <mn@northrook.com>
  */
-final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
+final class LocalStorage extends CacheAdapter
 {
-    private ?LoggerInterface $logger = null;
-
     /** @var array<string, array{'value':mixed,'expiry': false|int}|Item> */
     private array $data;
 
     private ?string $hash;
 
     private readonly string $filePath;
-
-    private readonly string $name;
 
     private readonly string $generator;
 
@@ -64,7 +59,15 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
         protected bool      $validate = true,
         protected false|int $defaultExpiry = false,
     ) {
-        $this->setup( $filePath, $name, $generator );
+        $this->filePath  = $filePath;
+        $this->generator = $generator ?? __CLASS__;
+
+        if ( ! $name ) {
+            $name = \basename( $this->filePath );
+            $name = \strrchr( $name, '.', true ) ?: $name;
+        }
+
+        $this->setName( $name );
     }
 
     public function __destruct()
@@ -110,7 +113,7 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
      */
     protected function loadItemData( string $key ) : Item|array
     {
-        return $this->storage()->data[$key] ?? [
+        return $this->loadStorage()->data[$key] ?? [
             'value'  => null,
             'expiry' => $this->defaultExpiry,
         ];
@@ -175,7 +178,7 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
     {
         return \array_key_exists(
             $this->validateKey( $key ),
-            $this->storage()->data,
+            $this->loadStorage()->data,
         );
     }
 
@@ -238,7 +241,7 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
             throw new InvalidArgumentException( 'Only '.Item::class.' instances are supported.' );
         }
         $item->setPool( $this );
-        $this->storage()->data[$item->getKey()] = $item;
+        $this->loadStorage()->data[$item->getKey()] = $item;
 
         return true;
     }
@@ -267,8 +270,11 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
                     'changes' => $force ? 'been forced to' : 'changes',
                 ],
             );
+
             return false;
         }
+
+        $profiler = $this->profile( __METHOD__ );
 
         $dataExport      = $this->exportData();
         $storageDataHash = \hash( algo : 'xxh3', data : $dataExport );
@@ -311,6 +317,7 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
             throw new LogicException( $e->getMessage(), $e->getCode(), $e );
         }
 
+        $profiler?->stop();
         return true;
     }
 
@@ -345,7 +352,9 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
      */
     protected function exportData() : string
     {
-        foreach ( $this->storage()->data as $key => $item ) {
+        $profiler = $this->profile( __METHOD__ );
+
+        foreach ( $this->loadStorage()->data as $key => $item ) {
             if ( $item instanceof Item ) {
                 $item = [
                     'value'  => $item->get(),
@@ -362,48 +371,20 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
             }
 
             $this->data[$key] = $item;
+
+            $profiler?->lap();
         }
 
         try {
-            return VarExporter::export( $this->data );
+            $data = VarExporter::export( $this->data );
         }
         catch ( Throwable $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
         }
-    }
 
-    public function setLogger( LoggerInterface $logger ) : void
-    {
-        $this->logger?->warning( 'Logger already set.' );
+        $profiler?->stop();
 
-        $this->logger ??= $logger;
-    }
-
-    /**
-     * Internal logging helper.
-     *
-     * @internal
-     *
-     * @param string               $message
-     * @param array<string, mixed> $context
-     */
-    protected function log(
-        string $message,
-        array  $context = [],
-    ) : void {
-        if ( $this->logger ) {
-            $this->logger->warning( $message, $context );
-        }
-        else {
-            $replace = [];
-
-            foreach ( $context as $k => $v ) {
-                if ( \is_scalar( $v ) ) {
-                    $replace['{'.$k.'}'] = $v;
-                }
-            }
-            @\trigger_error( \strtr( $message, $replace ), E_USER_WARNING );
-        }
+        return $data;
     }
 
     // .. Internal
@@ -412,11 +393,13 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
      * @internal
      * @return self
      */
-    protected function storage() : self
+    protected function loadStorage() : self
     {
         if ( isset( $this->data ) ) {
             return $this;
         }
+
+        $profiler = $this->profile( __METHOD__ );
 
         if ( ! \file_exists( $this->filePath ) ) {
             $this->data = [];
@@ -430,6 +413,8 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
         catch ( Throwable $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
         }
+
+        $profiler?->stop();
 
         return $this;
     }
@@ -449,17 +434,5 @@ final class LocalStorage implements CacheItemPoolInterface, LoggerAwareInterface
         );
 
         return \strtolower( $key );
-    }
-
-    private function setup( string $filePath, ?string $name, ?string $generator ) : void
-    {
-        $this->filePath  = $filePath;
-        $this->generator = $generator ?? __CLASS__;
-
-        if ( ! $name ) {
-            $name = \basename( $this->filePath );
-            $name = \strrchr( $name, '.', true ) ?: $name;
-        }
-        $this->name = $name;
     }
 }

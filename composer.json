@@ -19,13 +19,14 @@
   "require": {
     "php": ">=8.3",
     "psr/cache": "^3.0",
-    "symfony/var-exporter": "@stable"
+    "symfony/var-exporter": "@stable",
+    "symfony/stopwatch": "@stable"
   },
   "require-dev": {
     "northrook/dev": "dev-main",
     "symfony/cache": "^7.2"
   },
   "scripts": {
-    "phpstan": "vendor/bin/phpstan analyse"
+    "phpstan": "vendor/bin/phpstan analyse src"
   }
 }
