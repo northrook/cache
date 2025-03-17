@@ -22,21 +22,17 @@ abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterf
 
     final public function setLogger( LoggerInterface $logger ) : void
     {
-        $this->logger?->warning( 'Logger already set.' );
-
         $this->logger ??= $logger;
     }
 
     final public function setStopwatch( Stopwatch $stopwatch ) : void
     {
-        $this->logger?->warning( 'Stopwatch already set.' );
-
         $this->stopwatch ??= $stopwatch;
     }
 
-    final protected function profile( string $name ) : ?StopwatchEvent
+    final protected function profile( string $name, ?string $category = 'Cache' ) : ?StopwatchEvent
     {
-        return $this->stopwatch?->start( $name, \ucfirst( $this->name ) );
+        return $this->stopwatch?->start( $name, $category );
     }
 
     /**
