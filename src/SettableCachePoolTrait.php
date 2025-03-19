@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cache;
 
 use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\Stopwatch\Stopwatch;
 use const Support\CACHE_AUTO;
 
 /**
@@ -24,6 +25,7 @@ trait SettableCachePoolTrait
      * @param null|string                 $prefix     [optional] `prefix.key`
      * @param bool                        $defer
      * @param null|int                    $expiration
+     * @param null|Stopwatch              $stopwatch
      *
      * @return void
      */
@@ -32,7 +34,8 @@ trait SettableCachePoolTrait
         ?string                 $prefix = null,
         bool                    $defer = false,
         ?int                    $expiration = CACHE_AUTO,
+        ?Stopwatch              $stopwatch = null,
     ) : void {
-        $this->assignCacheAdapter( $adapter, $prefix, $defer, $expiration );
+        $this->assignCacheAdapter( $adapter, $prefix, $defer, $expiration, $stopwatch );
     }
 }

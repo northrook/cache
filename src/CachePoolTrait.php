@@ -6,13 +6,17 @@ namespace Cache;
 
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
 use Throwable, LogicException, InvalidArgumentException;
+use function Support\str_start;
 use const Support\{AUTO, CACHE_AUTO};
 
 trait CachePoolTrait
 {
     /** @var array<string, mixed>|CacheItemPoolInterface */
     protected CacheItemPoolInterface|array $cache = [];
+
+    private readonly ?Stopwatch $cacheStopwatch;
 
     private readonly ?string $cacheKeyPrefix;
 
@@ -30,6 +34,7 @@ trait CachePoolTrait
      * @param null|string                       $prefix     [optional] `prefix.key`
      * @param bool                              $defer
      * @param null|int                          $expiration
+     * @param null|Stopwatch                    $stopwatch
      *
      * @return void
      */
@@ -38,7 +43,10 @@ trait CachePoolTrait
         ?string                           $prefix = null,
         bool                              $defer = false,
         ?int                              $expiration = CACHE_AUTO,
+        ?Stopwatch                        $stopwatch = null,
     ) : void {
+        $this->cacheStopwatch ??= $stopwatch;
+
         if ( $this->cache instanceof CacheItemPoolInterface ) {
             return;
         }
@@ -83,6 +91,7 @@ trait CachePoolTrait
         }
 
         $key = $this->resolveCacheItemKey( $key );
+        $this->profileCacheEvent( "get.{$key}" );
 
         $arrayCache = \is_array( $this->cache );
 
@@ -118,6 +127,7 @@ trait CachePoolTrait
         }
 
         $key = $this->resolveCacheItemKey( $key );
+        $this->profileCacheEvent( "has.{$key}" );
 
         if ( \is_array( $this->cache ) ) {
             return isset( $this->cache[$key] );
@@ -144,6 +154,7 @@ trait CachePoolTrait
         }
 
         $key = $this->resolveCacheItemKey( $key );
+        $this->profileCacheEvent( "set.{$key}" );
 
         if ( \is_array( $this->cache ) ) {
             $this->cache[$key] = $value;
@@ -174,6 +185,7 @@ trait CachePoolTrait
         }
 
         $key = $this->resolveCacheItemKey( $key );
+        $this->profileCacheEvent( "unset.{$key}" );
 
         if ( \is_array( $this->cache ) ) {
             unset( $this->cache[$key] );
@@ -191,29 +203,36 @@ trait CachePoolTrait
     protected function commitCache() : void
     {
         if ( \is_array( $this->cache ) ) {
-            return;
+            $profiler = $this->profileCacheEvent( "commit.array.{$this->cacheKeyPrefix}" );
         }
-        try {
-            $this->cache->commit();
+        else {
+            $profiler = $this->profileCacheEvent( "commit.pool.{$this->cacheKeyPrefix}" );
+            try {
+                $this->cache->commit();
+            }
+            catch ( Throwable $exception ) {
+                $this->handleCacheException( __METHOD__, 'pool', $exception );
+            }
         }
-        catch ( Throwable $exception ) {
-            $this->handleCacheException( __METHOD__, 'commit', $exception );
-        }
+        $profiler?->stop();
     }
 
     protected function clearCache() : void
     {
         if ( \is_array( $this->cache ) ) {
+            $profiler    = $this->profileCacheEvent( "clear.array.{$this->cacheKeyPrefix}" );
             $this->cache = [];
-            return;
         }
-
-        try {
-            $this->cache->clear();
+        else {
+            $profiler = $this->profileCacheEvent( "clear.pool.{$this->cacheKeyPrefix}" );
+            try {
+                $this->cache->clear();
+            }
+            catch ( Throwable $exception ) {
+                $this->handleCacheException( __METHOD__, 'pool', $exception );
+            }
         }
-        catch ( Throwable $exception ) {
-            $this->handleCacheException( __METHOD__, $key, $exception );
-        }
+        $profiler?->stop();
     }
 
     private function resolveCacheItemKey( string $key ) : string
@@ -254,5 +273,20 @@ trait CachePoolTrait
                 $exception,
             );
         }
+    }
+
+    private function profileCacheEvent( string $name ) : ?StopwatchEvent
+    {
+        if ( ! $this->cacheStopwatch ) {
+            return null;
+        }
+
+        $name = str_start( \trim( $name, ' .' ), 'cache.' );
+
+        if ( $this->cacheStopwatch->isStarted( $name ) ) {
+            return $this->cacheStopwatch->getEvent( $name )->lap();
+        }
+
+        return $this->cacheStopwatch->start( $name, 'Cache' );
     }
 }

@@ -274,7 +274,7 @@ final class LocalStorage extends CacheAdapter
             return false;
         }
 
-        $profiler = $this->profile( __METHOD__ );
+        $profiler = $this->profile( "commit.{$this->name}" );
 
         $dataExport      = $this->exportData();
         $storageDataHash = \hash( algo : 'xxh3', data : $dataExport );
@@ -352,7 +352,7 @@ final class LocalStorage extends CacheAdapter
      */
     protected function exportData() : string
     {
-        $profiler = $this->profile( __METHOD__ );
+        $profiler = $this->profile( "export.{$this->name}" );
 
         foreach ( $this->loadStorage()->data as $key => $item ) {
             if ( $item instanceof Item ) {
@@ -399,7 +399,7 @@ final class LocalStorage extends CacheAdapter
             return $this;
         }
 
-        $profiler = $this->profile( __METHOD__ );
+        $profiler = $this->profile( "load.{$this->name}" );
 
         if ( ! \file_exists( $this->filePath ) ) {
             $this->data = [];

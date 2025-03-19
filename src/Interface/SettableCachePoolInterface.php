@@ -3,6 +3,7 @@
 namespace Cache\Interface;
 
 use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\Stopwatch\Stopwatch;
 use const Support\CACHE_AUTO;
 
 interface SettableCachePoolInterface
@@ -17,6 +18,7 @@ interface SettableCachePoolInterface
      * @param null|string                 $prefix     [optional] `prefix.key`
      * @param bool                        $defer
      * @param null|int                    $expiration
+     * @param null|Stopwatch              $stopwatch
      *
      * @return void
      */
@@ -25,5 +27,6 @@ interface SettableCachePoolInterface
         ?string                 $prefix = null,
         bool                    $defer = false,
         ?int                    $expiration = CACHE_AUTO,
+        ?Stopwatch              $stopwatch = null,
     ) : void;
 }

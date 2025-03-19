@@ -6,6 +6,7 @@ use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\{LoggerAwareInterface, LoggerInterface};
 use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
 use function Support\class_basename;
+use function Support\str_start;
 
 abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterface
 {
@@ -32,6 +33,7 @@ abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterf
 
     final protected function profile( string $name, ?string $category = 'Cache' ) : ?StopwatchEvent
     {
+        $name = str_start( \trim( $name, ' .' ), 'cache.' );
         return $this->stopwatch?->start( $name, $category );
     }
 
