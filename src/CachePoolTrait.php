@@ -91,6 +91,7 @@ trait CachePoolTrait
         }
 
         $key = $this->resolveCacheItemKey( $key );
+
         $this->profileCacheEvent( "get.{$key}" );
 
         $arrayCache = \is_array( $this->cache );
@@ -127,6 +128,7 @@ trait CachePoolTrait
         }
 
         $key = $this->resolveCacheItemKey( $key );
+
         $this->profileCacheEvent( "has.{$key}" );
 
         if ( \is_array( $this->cache ) ) {
@@ -154,7 +156,8 @@ trait CachePoolTrait
         }
 
         $key = $this->resolveCacheItemKey( $key );
-        $this->profileCacheEvent( "set.{$key}" );
+
+        $profile = $this->profileCacheEvent( "set.{$key}", true );
 
         if ( \is_array( $this->cache ) ) {
             $this->cache[$key] = $value;
@@ -171,11 +174,14 @@ trait CachePoolTrait
             }
             else {
                 $this->cache->save( $item );
+                $profile?->lap();
             }
         }
         catch ( Throwable $exception ) {
             $this->handleCacheException( __METHOD__, $key, $exception );
         }
+
+        $profile?->stop();
     }
 
     protected function unsetCache( string $key ) : void
@@ -185,6 +191,7 @@ trait CachePoolTrait
         }
 
         $key = $this->resolveCacheItemKey( $key );
+
         $this->profileCacheEvent( "unset.{$key}" );
 
         if ( \is_array( $this->cache ) ) {
@@ -203,36 +210,36 @@ trait CachePoolTrait
     protected function commitCache() : void
     {
         if ( \is_array( $this->cache ) ) {
-            $profiler = $this->profileCacheEvent( "commit.array.{$this->cacheKeyPrefix}" );
+            $this->profileCacheEvent( 'commit.array' );
         }
         else {
-            $profiler = $this->profileCacheEvent( "commit.pool.{$this->cacheKeyPrefix}" );
+            $profiler = $this->profileCacheEvent( 'commit.pool', true );
             try {
                 $this->cache->commit();
             }
             catch ( Throwable $exception ) {
                 $this->handleCacheException( __METHOD__, 'pool', $exception );
             }
+            $profiler?->stop();
         }
-        $profiler?->stop();
     }
 
     protected function clearCache() : void
     {
         if ( \is_array( $this->cache ) ) {
-            $profiler    = $this->profileCacheEvent( "clear.array.{$this->cacheKeyPrefix}" );
+            $this->profileCacheEvent( 'clear.array' );
             $this->cache = [];
         }
         else {
-            $profiler = $this->profileCacheEvent( "clear.pool.{$this->cacheKeyPrefix}" );
+            $profiler = $this->profileCacheEvent( 'clear.pool', true );
             try {
                 $this->cache->clear();
             }
             catch ( Throwable $exception ) {
                 $this->handleCacheException( __METHOD__, 'pool', $exception );
             }
+            $profiler?->stop();
         }
-        $profiler?->stop();
     }
 
     private function resolveCacheItemKey( string $key ) : string
@@ -275,18 +282,24 @@ trait CachePoolTrait
         }
     }
 
-    private function profileCacheEvent( string $name ) : ?StopwatchEvent
+    private function profileCacheEvent( string $name, bool $keepAlive = false ) : ?StopwatchEvent
     {
         if ( ! $this->cacheStopwatch ) {
             return null;
         }
 
-        $name = str_start( \trim( $name, ' .' ), 'cache.' );
+        $name = str_start( \trim( $name, ' .' ), "cache.{$this->cacheKeyPrefix}" );
 
-        if ( $this->cacheStopwatch->isStarted( $name ) ) {
-            return $this->cacheStopwatch->getEvent( $name )->lap();
+        $event = $this->cacheStopwatch->isStarted( $name )
+                ? $this->cacheStopwatch->getEvent( $name )
+                : $this->cacheStopwatch->start( $name, 'Cache' );
+
+        if ( $keepAlive ) {
+            return $event;
         }
 
-        return $this->cacheStopwatch->start( $name, 'Cache' );
+        $event->stop();
+
+        return null;
     }
 }
