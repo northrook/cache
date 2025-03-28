@@ -20,7 +20,8 @@
     "php": ">=8.3",
     "psr/cache": "^3.0",
     "symfony/var-exporter": "@stable",
-    "symfony/stopwatch": "@stable"
+    "symfony/stopwatch": "@stable",
+    "northrook/core": "dev-main"
   },
   "require-dev": {
     "northrook/dev": "dev-main",

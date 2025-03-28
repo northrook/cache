@@ -5,8 +5,7 @@ namespace Cache;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\{LoggerAwareInterface, LoggerInterface};
 use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
-use function Support\class_basename;
-use function Support\str_start;
+use function Support\{class_basename, str_start};
 
 abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterface
 {
