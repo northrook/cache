@@ -9,11 +9,11 @@ use function Support\{class_basename, str_start};
 
 abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterface
 {
+    private ?Stopwatch $stopwatch = null;
+
+    protected ?LoggerInterface $logger = null;
+
     protected readonly string $name;
-
-    protected readonly ?LoggerInterface $logger;
-
-    protected readonly ?Stopwatch $stopwatch;
 
     final protected function setName( ?string $name = null ) : void
     {
