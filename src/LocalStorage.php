@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cache;
 
 use Cache\LocalStorage\Item;
-use Psr\Cache\{CacheItemInterface};
+use Psr\Cache\CacheItemInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\VarExporter\VarExporter;
 use Stringable, Throwable, InvalidArgumentException, LogicException;
