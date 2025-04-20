@@ -296,7 +296,7 @@ final class LocalStorage extends CacheAdapter
             
                Name      : {$this->name}
                Generated : {$formattedTimestamp}
-               Generator : {$this->generator}.
+               Generator : {$this->generator}
             
                Do not edit it manually.
             
