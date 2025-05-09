@@ -34,8 +34,11 @@ abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterf
 
     final protected function profile( string $name, ?string $category = 'Cache' ) : ?StopwatchEvent
     {
+        if ( ! $this->stopwatch ) {
+            return null;
+        }
         $name = str_start( \trim( $name, ' .' ), 'cache.' );
-        return $this->stopwatch?->start( $name, $category );
+        return $this->stopwatch->start( $name, $category );
     }
 
     /**

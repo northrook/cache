@@ -24,7 +24,7 @@ use DateTimeImmutable, DateMalformedStringException;
  *
  * @author Martin Nielsen <mn@northrook.com>
  */
-final class LocalStorage extends CacheAdapter
+class LocalStorage extends CacheAdapter
 {
     /** @var array<string, array{'value':mixed,'expiry': false|int}|Item> */
     private array $data;
@@ -104,19 +104,6 @@ final class LocalStorage extends CacheAdapter
         }
 
         return $this->getItem( $key )->set( $callback )->get();
-    }
-
-    /**
-     * @param string $key
-     *
-     * @return array{'value':mixed,'expiry': false|int}|Item
-     */
-    protected function loadItemData( string $key ) : Item|array
-    {
-        return $this->loadStorage()->data[$key] ?? [
-            'value'  => null,
-            'expiry' => $this->defaultExpiry,
-        ];
     }
 
     /**
@@ -255,7 +242,7 @@ final class LocalStorage extends CacheAdapter
         return $this->hasChanges;
     }
 
-    public function commit( bool $force = false ) : bool
+    final public function commit( bool $force = false ) : bool
     {
         if ( $force ) {
             $this->hasChanges = true;
@@ -280,7 +267,7 @@ final class LocalStorage extends CacheAdapter
         $storageDataHash = \hash( algo : 'xxh3', data : $dataExport );
 
         if ( $this->validate && $storageDataHash === ( $this->hash ?? null ) ) {
-            $this->logger?->info( $this->name.': Matches hashes, no changes to commit.' );
+            $this->logger?->debug( $this->name.': Matches hashes, no changes to commit.' );
             return false;
         }
 
@@ -386,10 +373,22 @@ final class LocalStorage extends CacheAdapter
     // .. Internal
 
     /**
-     * @internal
+     * @param string $key
+     *
+     * @return array{'value':mixed,'expiry': false|int}|Item
+     */
+    final protected function loadItemData( string $key ) : Item|array
+    {
+        return $this->loadStorage()->data[$key] ?? [
+            'value'  => null,
+            'expiry' => $this->defaultExpiry,
+        ];
+    }
+
+    /**
      * @return self
      */
-    protected function loadStorage() : self
+    final protected function loadStorage() : self
     {
         if ( isset( $this->data ) ) {
             return $this;
