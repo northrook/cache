@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Cache;
 
-use JetBrains\PhpStorm\Deprecated;
+use Core\Interface\LogHandler;
 use Psr\Cache\CacheItemPoolInterface;
-use Psr\Log\LoggerInterface;
 use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
-use Throwable, LogicException, InvalidArgumentException;
+use Throwable, InvalidArgumentException;
 use function Support\str_start;
 use const Support\{AUTO, CACHE_AUTO};
 
-#[Deprecated( 'Renamed to CacheHandler', CacheHandler::class )]
-trait CachePoolTrait
+trait CacheHandler
 {
+    use LogHandler;
+
     /** @var array<string, mixed>|CacheItemPoolInterface */
     protected CacheItemPoolInterface|array $cache = [];
 
@@ -106,7 +106,7 @@ trait CachePoolTrait
                 return $this->cache->getItem( $key )->get();
             }
             catch ( Throwable $exception ) {
-                $this->handleCacheException( __METHOD__, $key, $exception );
+                $this->log( $exception, ['method' => __METHOD__, 'key' => $key] );
             }
         }
 
@@ -141,7 +141,7 @@ trait CachePoolTrait
             return $this->cache->hasItem( $key );
         }
         catch ( Throwable $exception ) {
-            $this->handleCacheException( __METHOD__, $key, $exception );
+            $this->log( $exception, ['method' => __METHOD__, 'key' => $key] );
         }
 
         return false;
@@ -180,7 +180,7 @@ trait CachePoolTrait
             }
         }
         catch ( Throwable $exception ) {
-            $this->handleCacheException( __METHOD__, $key, $exception );
+            $this->log( $exception, ['method' => __METHOD__, 'key' => $key] );
         }
 
         $profile?->stop();
@@ -205,7 +205,7 @@ trait CachePoolTrait
             $this->cache->deleteItem( $key );
         }
         catch ( Throwable $exception ) {
-            $this->handleCacheException( __METHOD__, $key, $exception );
+            $this->log( $exception, ['method' => __METHOD__, 'key' => $key] );
         }
     }
 
@@ -220,7 +220,7 @@ trait CachePoolTrait
                 $this->cache->commit();
             }
             catch ( Throwable $exception ) {
-                $this->handleCacheException( __METHOD__, 'pool', $exception );
+                $this->log( $exception, ['method' => __METHOD__, 'name' => 'commit.pool'] );
             }
             $profiler?->stop();
         }
@@ -238,7 +238,7 @@ trait CachePoolTrait
                 $this->cache->clear();
             }
             catch ( Throwable $exception ) {
-                $this->handleCacheException( __METHOD__, 'pool', $exception );
+                $this->log( $exception, ['method' => __METHOD__, 'name' => 'clear.pool'] );
             }
             $profiler?->stop();
         }
@@ -251,37 +251,6 @@ trait CachePoolTrait
         }
 
         return $this->cacheKeyPrefix.$key;
-    }
-
-    /**
-     * @param string    $caller
-     * @param string    $key
-     * @param Throwable $exception
-     *
-     * @return void
-     *
-     * @throws LogicException
-     */
-    private function handleCacheException(
-        string    $caller,
-        string    $key,
-        Throwable $exception,
-    ) : void {
-        if ( \property_exists( $this, 'logger' )
-             && $this->logger instanceof LoggerInterface
-        ) {
-            $this->logger->error(
-                "{$caller}: {key}. ".$exception->getMessage(),
-                ['key' => $key, 'exception' => $exception],
-            );
-        }
-        else {
-            throw new LogicException(
-                "{$caller}: {$key}. ".$exception->getMessage(),
-                $exception->getCode(),
-                $exception,
-            );
-        }
     }
 
     private function profileCacheEvent( string $name, bool $keepAlive = false ) : ?StopwatchEvent

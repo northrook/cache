@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Cache;
 
+use Psr\Log\LoggerInterface;
 use Psr\Cache\CacheItemPoolInterface;
-use Psr\Log\{LoggerAwareInterface, LoggerInterface};
+use Core\Interface\{LogHandler, Loggable};
 use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
 use function Support\{class_basename, str_start};
 
-abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterface
+abstract class CacheAdapter implements CacheItemPoolInterface, Loggable
 {
-    private ?Stopwatch $stopwatch = null;
+    use LogHandler;
 
-    protected ?LoggerInterface $logger = null;
+    private ?Stopwatch $stopwatch = null;
 
     protected readonly string $name;
 
@@ -39,32 +40,5 @@ abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterf
         }
         $name = str_start( \trim( $name, ' .' ), 'cache.' );
         return $this->stopwatch->start( $name, $category );
-    }
-
-    /**
-     * Internal logging helper.
-     *
-     * @internal
-     *
-     * @param string               $message
-     * @param array<string, mixed> $context
-     */
-    final protected function log(
-        string $message,
-        array  $context = [],
-    ) : void {
-        if ( $this->logger ) {
-            $this->logger->warning( $message, $context );
-        }
-        else {
-            $replace = [];
-
-            foreach ( $context as $k => $v ) {
-                if ( \is_scalar( $v ) ) {
-                    $replace['{'.$k.'}'] = $v;
-                }
-            }
-            @\trigger_error( \strtr( $message, $replace ), E_USER_WARNING );
-        }
     }
 }

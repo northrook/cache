@@ -2,13 +2,11 @@
 
 namespace Cache\Interface;
 
-use JetBrains\PhpStorm\Deprecated;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\Stopwatch\Stopwatch;
 use const Support\CACHE_AUTO;
 
-#[Deprecated( replacement : Cachable::class )]
-interface SettableCachePoolInterface
+interface Cachable
 {
     /**
      * Sets the {@see CacheItemPoolInterface}.

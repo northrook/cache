@@ -8,8 +8,8 @@ use Cache\LocalStorage\Item;
 use Psr\Cache\CacheItemInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\VarExporter\VarExporter;
-use Stringable, Throwable, InvalidArgumentException, LogicException;
-use DateTimeImmutable, DateMalformedStringException;
+use Stringable, Throwable, InvalidArgumentException;
+use function Support\datetime;
 
 /**
  * File cache designed for high-performance data persistence.
@@ -126,7 +126,10 @@ class LocalStorage extends CacheAdapter
         }
 
         if ( $data->expired() ) {
-            $this->logger?->info( $this->name.': Item expired: '.$key );
+            $this->log(
+                '{class} {name} item {key} has expired. ',
+                ['class' => $this::class, 'name' => $this->name, 'key' => $key],
+            );
             $data->set( null );
         }
 
@@ -246,32 +249,37 @@ class LocalStorage extends CacheAdapter
     {
         if ( $force ) {
             $this->hasChanges = true;
+            $this->log(
+                '{class} {name} has been forced to commit {items} items.',
+                [
+                    'class' => $this::class,
+                    'name'  => $this->name,
+                    'items' => \count( $this->data ?? [] ),
+                ],
+                'warning',
+            );
         }
 
         // Do not attempt to commit anything if nothing has changed
         if ( $this->autosave && ( empty( $this->data ) || $this->hasChanges === false ) ) {
-            $this->logger?->info(
-                '{storage} has {changes} to commit.',
-                [
-                    'storage' => $this->name,
-                    'changes' => $force ? 'been forced to' : 'changes',
-                ],
-            );
-
             return false;
         }
 
         $profiler = $this->profile( "commit.{$this->name}" );
 
         $dataExport      = $this->exportData();
-        $storageDataHash = \hash( algo : 'xxh3', data : $dataExport );
+        $storageDataHash = \hash( algo : 'xxh32', data : $dataExport );
 
         if ( $this->validate && $storageDataHash === ( $this->hash ?? null ) ) {
-            $this->logger?->debug( $this->name.': Matches hashes, no changes to commit.' );
+            $this->log(
+                '{class} {name} Matches hashes, no changes to commit.',
+                ['class' => $this::class, 'name' => $this->name],
+                'debug',
+            );
             return false;
         }
 
-        $dateTime = $this->getDateTime();
+        $dateTime = datetime();
 
         $timestamp          = $dateTime->getTimestamp();
         $formattedTimestamp = $dateTime->format( 'Y-m-d H:i:s e' );
@@ -294,10 +302,14 @@ class LocalStorage extends CacheAdapter
 
         try {
             ( new Filesystem() )->dumpFile( $this->filePath, $localStorage.PHP_EOL );
-            $this->logger?->info( $this->name.': Changes committed.' );
+            $this->log(
+                '{class} {name} Changes committed.',
+                ['class' => $this::class, 'name' => $this->name, 'path' => $this->filePath],
+            );
         }
-        catch ( Throwable $e ) {
-            throw new LogicException( $e->getMessage(), $e->getCode(), $e );
+        catch ( Throwable $exception ) {
+            $this->log( $exception );
+            return false;
         }
 
         $profiler?->stop();
@@ -319,17 +331,6 @@ class LocalStorage extends CacheAdapter
         ];
     }
 
-    protected function getDateTime() : DateTimeImmutable
-    {
-        // TODO: [low] static or property
-        try {
-            return new DateTimeImmutable( timezone : \timezone_open( 'UTC' ) ?: null );
-        }
-        catch ( DateMalformedStringException $e ) {
-            throw new LogicException( $e->getMessage(), $e->getCode(), $e );
-        }
-    }
-
     /**
      * @return string
      */
@@ -346,7 +347,10 @@ class LocalStorage extends CacheAdapter
             }
 
             if ( $item['expiry'] > \time() ) {
-                $this->logger?->info( $this->name.': Item expired: '.$key );
+                $this->log(
+                    '{class} {name} item {key} has expired. ',
+                    ['class' => $this::class, 'name' => $this->name, 'key' => $key],
+                );
                 $this->hasChanges = true;
                 unset( $this->data[$key] );
 

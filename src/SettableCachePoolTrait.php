@@ -13,7 +13,7 @@ use const Support\CACHE_AUTO;
  */
 trait SettableCachePoolTrait
 {
-    use CachePoolTrait;
+    use CacheHandler;
 
     /**
      * Sets the {@see CacheItemPoolInterface}.
