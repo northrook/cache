@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Cache;
 
-use Core\Interface\LogHandler;
+use Core\Interface\Loggable;
 use Psr\Cache\CacheItemPoolInterface;
+use Psr\Log\LoggerInterface;
+use LogicException;
 use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
 use Throwable, InvalidArgumentException;
-use function Support\str_start;
+use function Support\{str_start};
 use const Support\{AUTO, CACHE_AUTO};
 
 trait CacheHandler
 {
-    use LogHandler;
-
     /** @var array<string, mixed>|CacheItemPoolInterface */
-    protected CacheItemPoolInterface|array $cache = [];
+    protected readonly CacheItemPoolInterface|array $cache;
 
     private readonly ?Stopwatch $cacheStopwatch;
 
@@ -106,7 +106,7 @@ trait CacheHandler
                 return $this->cache->getItem( $key )->get();
             }
             catch ( Throwable $exception ) {
-                $this->log( $exception, ['method' => __METHOD__, 'key' => $key] );
+                $this->handleCacheException( __METHOD__, $key, $exception );
             }
         }
 
@@ -141,7 +141,7 @@ trait CacheHandler
             return $this->cache->hasItem( $key );
         }
         catch ( Throwable $exception ) {
-            $this->log( $exception, ['method' => __METHOD__, 'key' => $key] );
+            $this->handleCacheException( __METHOD__, $key, $exception );
         }
 
         return false;
@@ -180,7 +180,7 @@ trait CacheHandler
             }
         }
         catch ( Throwable $exception ) {
-            $this->log( $exception, ['method' => __METHOD__, 'key' => $key] );
+            $this->handleCacheException( __METHOD__, $key, $exception );
         }
 
         $profile?->stop();
@@ -205,7 +205,7 @@ trait CacheHandler
             $this->cache->deleteItem( $key );
         }
         catch ( Throwable $exception ) {
-            $this->log( $exception, ['method' => __METHOD__, 'key' => $key] );
+            $this->handleCacheException( __METHOD__, $key, $exception );
         }
     }
 
@@ -220,7 +220,7 @@ trait CacheHandler
                 $this->cache->commit();
             }
             catch ( Throwable $exception ) {
-                $this->log( $exception, ['method' => __METHOD__, 'name' => 'commit.pool'] );
+                $this->handleCacheException( __METHOD__, 'pool', $exception );
             }
             $profiler?->stop();
         }
@@ -238,7 +238,7 @@ trait CacheHandler
                 $this->cache->clear();
             }
             catch ( Throwable $exception ) {
-                $this->log( $exception, ['method' => __METHOD__, 'name' => 'clear.pool'] );
+                $this->handleCacheException( __METHOD__, $key, $exception );
             }
             $profiler?->stop();
         }
@@ -272,5 +272,42 @@ trait CacheHandler
         $event->stop();
 
         return null;
+    }
+
+    /**
+     * @param string    $caller
+     * @param string    $key
+     * @param Throwable $exception
+     *
+     * @return void
+     *
+     * @throws LogicException
+     */
+    private function handleCacheException(
+        string    $caller,
+        string    $key,
+        Throwable $exception,
+    ) : void {
+        // Use LogHandler if available
+        if ( $this instanceof Loggable && \method_exists( $this, 'log' ) ) {
+            $this->log( $exception, ['key' => $key, 'caller' => $caller] );
+            return;
+        }
+
+        // Use PSR Logger as fallback
+        if ( \property_exists( $this, 'logger' ) && $this->logger instanceof LoggerInterface ) {
+            $this->logger->error(
+                "{$caller}: {key}. ".$exception->getMessage(),
+                ['key' => $key, 'exception' => $exception],
+            );
+            return;
+        }
+
+        // Throw as a last resort
+        throw new LogicException(
+            "{$caller}: {$key}. ".$exception->getMessage(),
+            $exception->getCode(),
+            $exception,
+        );
     }
 }
