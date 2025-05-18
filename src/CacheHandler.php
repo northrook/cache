@@ -49,7 +49,7 @@ trait CacheHandler
     ) : void {
         $this->cacheStopwatch ??= $stopwatch;
 
-        if ( $this->cache instanceof CacheItemPoolInterface ) {
+        if ( isset( $this->cache ) ) {
             return;
         }
 
