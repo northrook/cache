@@ -16,7 +16,7 @@ use const Support\{AUTO, CACHE_AUTO};
 trait CacheHandler
 {
     /** @var array<string, mixed>|CacheItemPoolInterface */
-    protected readonly CacheItemPoolInterface|array $cache;
+    private CacheItemPoolInterface|array $cacheAdapter;
 
     private readonly ?Stopwatch $cacheStopwatch;
 
@@ -49,11 +49,11 @@ trait CacheHandler
     ) : void {
         $this->cacheStopwatch ??= $stopwatch;
 
-        if ( isset( $this->cache ) ) {
+        if ( isset( $this->cacheAdapter ) ) {
             return;
         }
 
-        $this->cache = $adapter ?? [];
+        // $this->cacheAdapter    = $adapter ?? [];
         $this->cacheExpiration ??= $expiration;
         $this->cacheDeferCommit = $defer;
 
@@ -68,6 +68,23 @@ trait CacheHandler
         else {
             $this->cacheKeyPrefix = null;
         }
+    }
+
+    /**
+     * Retrieve the current `PSR\Cache` adapter if set.
+     *
+     * Unassigned and in-memory cache returns `null`
+     *
+     * @return null|CacheItemPoolInterface
+     */
+    protected function getCacheAdapter() : ?CacheItemPoolInterface
+    {
+        if ( isset( $this->cacheAdapter )
+             && $this->cacheAdapter instanceof CacheItemPoolInterface
+        ) {
+            return $this->cacheAdapter;
+        }
+        return null;
     }
 
     /**
@@ -96,14 +113,14 @@ trait CacheHandler
 
         $this->profileCacheEvent( "get.{$key}" );
 
-        $arrayCache = \is_array( $this->cache );
+        $arrayCache = \is_array( $this->cacheAdapter ??= [] );
 
         if ( $this->hasCache( $key ) ) {
             if ( $arrayCache ) {
-                return $this->cache[$key];
+                return $this->cacheAdapter[$key];
             }
             try {
-                return $this->cache->getItem( $key )->get();
+                return $this->cacheAdapter->getItem( $key )->get();
             }
             catch ( Throwable $exception ) {
                 $this->handleCacheException( __METHOD__, $key, $exception );
@@ -115,7 +132,7 @@ trait CacheHandler
         }
 
         if ( $arrayCache ) {
-            return $this->cache[$key] = $value;
+            return $this->cacheAdapter[$key] = $value;
         }
 
         $this->setCache( $key, $value, $expiration, $defer );
@@ -125,7 +142,7 @@ trait CacheHandler
 
     protected function hasCache( ?string $key ) : bool
     {
-        if ( ! $key ) {
+        if ( ! $key || ! isset( $this->cacheAdapter ) ) {
             return false;
         }
 
@@ -133,12 +150,12 @@ trait CacheHandler
 
         $this->profileCacheEvent( "has.{$key}" );
 
-        if ( \is_array( $this->cache ) ) {
-            return isset( $this->cache[$key] );
+        if ( \is_array( $this->cacheAdapter ) ) {
+            return isset( $this->cacheAdapter[$key] );
         }
 
         try {
-            return $this->cache->hasItem( $key );
+            return $this->cacheAdapter->hasItem( $key );
         }
         catch ( Throwable $exception ) {
             $this->handleCacheException( __METHOD__, $key, $exception );
@@ -161,21 +178,21 @@ trait CacheHandler
 
         $profile = $this->profileCacheEvent( "set.{$key}", true );
 
-        if ( \is_array( $this->cache ) ) {
-            $this->cache[$key] = $value;
+        if ( \is_array( $this->cacheAdapter ??= [] ) ) {
+            $this->cacheAdapter[$key] = $value;
             return;
         }
 
         try {
-            $item = $this->cache->getItem( $key );
+            $item = $this->cacheAdapter->getItem( $key );
             $item
                 ->expiresAfter( $expiration ?? $this->cacheExpiration )
                 ->set( $value );
             if ( $defer ?? $this->cacheDeferCommit ) {
-                $this->cache->saveDeferred( $item );
+                $this->cacheAdapter->saveDeferred( $item );
             }
             else {
-                $this->cache->save( $item );
+                $this->cacheAdapter->save( $item );
                 $profile?->lap();
             }
         }
@@ -188,7 +205,7 @@ trait CacheHandler
 
     protected function unsetCache( string $key ) : void
     {
-        if ( ! $key ) {
+        if ( ! $key || ! isset( $this->cacheAdapter ) ) {
             return;
         }
 
@@ -196,13 +213,13 @@ trait CacheHandler
 
         $this->profileCacheEvent( "unset.{$key}" );
 
-        if ( \is_array( $this->cache ) ) {
-            unset( $this->cache[$key] );
+        if ( \is_array( $this->cacheAdapter ) ) {
+            unset( $this->cacheAdapter[$key] );
             return;
         }
 
         try {
-            $this->cache->deleteItem( $key );
+            $this->cacheAdapter->deleteItem( $key );
         }
         catch ( Throwable $exception ) {
             $this->handleCacheException( __METHOD__, $key, $exception );
@@ -211,13 +228,17 @@ trait CacheHandler
 
     protected function commitCache() : void
     {
-        if ( \is_array( $this->cache ) ) {
+        if ( ! isset( $this->cacheAdapter ) ) {
+            return;
+        }
+
+        if ( \is_array( $this->cacheAdapter ) ) {
             $this->profileCacheEvent( 'commit.array' );
         }
         else {
             $profiler = $this->profileCacheEvent( 'commit.pool', true );
             try {
-                $this->cache->commit();
+                $this->cacheAdapter->commit();
             }
             catch ( Throwable $exception ) {
                 $this->handleCacheException( __METHOD__, 'pool', $exception );
@@ -228,14 +249,18 @@ trait CacheHandler
 
     protected function clearCache() : void
     {
-        if ( \is_array( $this->cache ) ) {
+        if ( ! isset( $this->cacheAdapter ) ) {
+            return;
+        }
+
+        if ( \is_array( $this->cacheAdapter ) ) {
             $this->profileCacheEvent( 'clear.array' );
-            $this->cache = [];
+            $this->cacheAdapter = [];
         }
         else {
             $profiler = $this->profileCacheEvent( 'clear.pool', true );
             try {
-                $this->cache->clear();
+                $this->cacheAdapter->clear();
             }
             catch ( Throwable $exception ) {
                 $this->handleCacheException( __METHOD__, $key, $exception );
