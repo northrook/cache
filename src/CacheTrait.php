@@ -4,19 +4,21 @@ declare(strict_types=1);
 
 namespace Cache;
 
+use Core\Interface\Loggable;
 use JetBrains\PhpStorm\Deprecated;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
+use LogicException;
 use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
-use Throwable, LogicException, InvalidArgumentException;
-use function Support\str_start;
+use Throwable, InvalidArgumentException;
+use function Support\{str_start};
 use const Support\{AUTO, CACHE_AUTO};
 
-#[Deprecated( 'Renamed to CacheHandler', CacheTrait::class )]
-trait CachePoolTrait
+#[Deprecated( 'Refactored into CacheHandler', CacheHandler::class )]
+trait CacheTrait
 {
     /** @var array<string, mixed>|CacheItemPoolInterface */
-    protected CacheItemPoolInterface|array $cache = [];
+    private CacheItemPoolInterface|array $cacheAdapter;
 
     private readonly ?Stopwatch $cacheStopwatch;
 
@@ -49,11 +51,11 @@ trait CachePoolTrait
     ) : void {
         $this->cacheStopwatch ??= $stopwatch;
 
-        if ( $this->cache instanceof CacheItemPoolInterface ) {
+        if ( isset( $this->cacheAdapter ) ) {
             return;
         }
 
-        $this->cache = $adapter ?? [];
+        // $this->cacheAdapter    = $adapter ?? [];
         $this->cacheExpiration ??= $expiration;
         $this->cacheDeferCommit = $defer;
 
@@ -68,6 +70,23 @@ trait CachePoolTrait
         else {
             $this->cacheKeyPrefix = null;
         }
+    }
+
+    /**
+     * Retrieve the current `PSR\Cache` adapter if set.
+     *
+     * Unassigned and in-memory cache returns `null`
+     *
+     * @return null|CacheItemPoolInterface
+     */
+    protected function getCacheAdapter() : ?CacheItemPoolInterface
+    {
+        if ( isset( $this->cacheAdapter )
+             && $this->cacheAdapter instanceof CacheItemPoolInterface
+        ) {
+            return $this->cacheAdapter;
+        }
+        return null;
     }
 
     /**
@@ -96,14 +115,14 @@ trait CachePoolTrait
 
         $this->profileCacheEvent( "get.{$key}" );
 
-        $arrayCache = \is_array( $this->cache );
+        $arrayCache = \is_array( $this->cacheAdapter ??= [] );
 
         if ( $this->hasCache( $key ) ) {
             if ( $arrayCache ) {
-                return $this->cache[$key];
+                return $this->cacheAdapter[$key];
             }
             try {
-                return $this->cache->getItem( $key )->get();
+                return $this->cacheAdapter->getItem( $key )->get();
             }
             catch ( Throwable $exception ) {
                 $this->handleCacheException( __METHOD__, $key, $exception );
@@ -115,7 +134,7 @@ trait CachePoolTrait
         }
 
         if ( $arrayCache ) {
-            return $this->cache[$key] = $value;
+            return $this->cacheAdapter[$key] = $value;
         }
 
         $this->setCache( $key, $value, $expiration, $defer );
@@ -125,7 +144,7 @@ trait CachePoolTrait
 
     protected function hasCache( ?string $key ) : bool
     {
-        if ( ! $key ) {
+        if ( ! $key || ! isset( $this->cacheAdapter ) ) {
             return false;
         }
 
@@ -133,12 +152,12 @@ trait CachePoolTrait
 
         $this->profileCacheEvent( "has.{$key}" );
 
-        if ( \is_array( $this->cache ) ) {
-            return isset( $this->cache[$key] );
+        if ( \is_array( $this->cacheAdapter ) ) {
+            return isset( $this->cacheAdapter[$key] );
         }
 
         try {
-            return $this->cache->hasItem( $key );
+            return $this->cacheAdapter->hasItem( $key );
         }
         catch ( Throwable $exception ) {
             $this->handleCacheException( __METHOD__, $key, $exception );
@@ -161,21 +180,21 @@ trait CachePoolTrait
 
         $profile = $this->profileCacheEvent( "set.{$key}", true );
 
-        if ( \is_array( $this->cache ) ) {
-            $this->cache[$key] = $value;
+        if ( \is_array( $this->cacheAdapter ??= [] ) ) {
+            $this->cacheAdapter[$key] = $value;
             return;
         }
 
         try {
-            $item = $this->cache->getItem( $key );
+            $item = $this->cacheAdapter->getItem( $key );
             $item
                 ->expiresAfter( $expiration ?? $this->cacheExpiration )
                 ->set( $value );
             if ( $defer ?? $this->cacheDeferCommit ) {
-                $this->cache->saveDeferred( $item );
+                $this->cacheAdapter->saveDeferred( $item );
             }
             else {
-                $this->cache->save( $item );
+                $this->cacheAdapter->save( $item );
                 $profile?->lap();
             }
         }
@@ -188,7 +207,7 @@ trait CachePoolTrait
 
     protected function unsetCache( string $key ) : void
     {
-        if ( ! $key ) {
+        if ( ! $key || ! isset( $this->cacheAdapter ) ) {
             return;
         }
 
@@ -196,13 +215,13 @@ trait CachePoolTrait
 
         $this->profileCacheEvent( "unset.{$key}" );
 
-        if ( \is_array( $this->cache ) ) {
-            unset( $this->cache[$key] );
+        if ( \is_array( $this->cacheAdapter ) ) {
+            unset( $this->cacheAdapter[$key] );
             return;
         }
 
         try {
-            $this->cache->deleteItem( $key );
+            $this->cacheAdapter->deleteItem( $key );
         }
         catch ( Throwable $exception ) {
             $this->handleCacheException( __METHOD__, $key, $exception );
@@ -211,13 +230,17 @@ trait CachePoolTrait
 
     protected function commitCache() : void
     {
-        if ( \is_array( $this->cache ) ) {
+        if ( ! isset( $this->cacheAdapter ) ) {
+            return;
+        }
+
+        if ( \is_array( $this->cacheAdapter ) ) {
             $this->profileCacheEvent( 'commit.array' );
         }
         else {
             $profiler = $this->profileCacheEvent( 'commit.pool', true );
             try {
-                $this->cache->commit();
+                $this->cacheAdapter->commit();
             }
             catch ( Throwable $exception ) {
                 $this->handleCacheException( __METHOD__, 'pool', $exception );
@@ -228,17 +251,21 @@ trait CachePoolTrait
 
     protected function clearCache() : void
     {
-        if ( \is_array( $this->cache ) ) {
+        if ( ! isset( $this->cacheAdapter ) ) {
+            return;
+        }
+
+        if ( \is_array( $this->cacheAdapter ) ) {
             $this->profileCacheEvent( 'clear.array' );
-            $this->cache = [];
+            $this->cacheAdapter = [];
         }
         else {
             $profiler = $this->profileCacheEvent( 'clear.pool', true );
             try {
-                $this->cache->clear();
+                $this->cacheAdapter->clear();
             }
             catch ( Throwable $exception ) {
-                $this->handleCacheException( __METHOD__, 'pool', $exception );
+                $this->handleCacheException( __METHOD__, $key, $exception );
             }
             $profiler?->stop();
         }
@@ -251,37 +278,6 @@ trait CachePoolTrait
         }
 
         return $this->cacheKeyPrefix.$key;
-    }
-
-    /**
-     * @param string    $caller
-     * @param string    $key
-     * @param Throwable $exception
-     *
-     * @return void
-     *
-     * @throws LogicException
-     */
-    private function handleCacheException(
-        string    $caller,
-        string    $key,
-        Throwable $exception,
-    ) : void {
-        if ( \property_exists( $this, 'logger' )
-             && $this->logger instanceof LoggerInterface
-        ) {
-            $this->logger->error(
-                "{$caller}: {key}. ".$exception->getMessage(),
-                ['key' => $key, 'exception' => $exception],
-            );
-        }
-        else {
-            throw new LogicException(
-                "{$caller}: {$key}. ".$exception->getMessage(),
-                $exception->getCode(),
-                $exception,
-            );
-        }
     }
 
     private function profileCacheEvent( string $name, bool $keepAlive = false ) : ?StopwatchEvent
@@ -303,5 +299,42 @@ trait CachePoolTrait
         $event->stop();
 
         return null;
+    }
+
+    /**
+     * @param string    $caller
+     * @param string    $key
+     * @param Throwable $exception
+     *
+     * @return void
+     *
+     * @throws LogicException
+     */
+    private function handleCacheException(
+        string    $caller,
+        string    $key,
+        Throwable $exception,
+    ) : void {
+        // Use LogHandler if available
+        if ( $this instanceof Loggable && \method_exists( $this, 'log' ) ) {
+            $this->log( $exception, ['key' => $key, 'caller' => $caller] );
+            return;
+        }
+
+        // Use PSR Logger as fallback
+        if ( \property_exists( $this, 'logger' ) && $this->logger instanceof LoggerInterface ) {
+            $this->logger->error(
+                "{$caller}: {key}. ".$exception->getMessage(),
+                ['key' => $key, 'exception' => $exception],
+            );
+            return;
+        }
+
+        // Throw as a last resort
+        throw new LogicException(
+            "{$caller}: {$key}. ".$exception->getMessage(),
+            $exception->getCode(),
+            $exception,
+        );
     }
 }
