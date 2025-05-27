@@ -21,7 +21,8 @@
     "psr/cache": "^3.0",
     "symfony/var-exporter": "@stable",
     "symfony/stopwatch": "@stable",
-    "northrook/core": "dev-main"
+    "northrook/core": "dev-main",
+    "northrook/profiler": "dev-main"
   },
   "require-dev": {
     "northrook/dev": "dev-main",

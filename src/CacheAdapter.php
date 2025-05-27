@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Cache;
 
-use Core\Autowire\{Logger, Profiler};
+use Core\Autowire\Logger;
 use Psr\Log\{LoggerAwareInterface, LoggerInterface};
 use Psr\Cache\CacheItemPoolInterface;
 use function Support\{class_basename};
 
 abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterface
 {
-    use Logger, Profiler;
+    use Logger;
 
     protected readonly string $name;
 

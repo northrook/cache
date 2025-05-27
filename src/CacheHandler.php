@@ -5,20 +5,23 @@ declare(strict_types=1);
 namespace Cache;
 
 use Core\Exception\ErrorException;
+use Core\Interface\ProfilerInterface;
+use Core\Profiler;
 use Cache\Exception\{InvalidCacheKeyException, RuntimeCacheException};
 use LogicException;
 use Psr\Cache\{CacheItemInterface, CacheItemPoolInterface};
 use Psr\Log\{LoggerAwareInterface, LoggerInterface};
-use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
+use Symfony\Component\Stopwatch\{Stopwatch};
 use Throwable;
-use function Support\str_start;
 
 final class CacheHandler implements LoggerAwareInterface
 {
-    private ?string $cacheKeyPrefix;
+    private readonly ?string $cacheKeyPrefix;
 
     /** @var ?CacheItemPoolInterface */
     private readonly ?CacheItemPoolInterface $cacheAdapter;
+
+    private readonly ProfilerInterface $profiler;
 
     /** @var array<string, mixed> */
     protected array $inMemory;
@@ -29,15 +32,15 @@ final class CacheHandler implements LoggerAwareInterface
      * @param null|int                                         $expiration
      * @param bool                                             $deferCommit
      * @param ?LoggerInterface                                 $logger
-     * @param null|Stopwatch                                   $stopwatch
+     * @param null|ProfilerInterface|Stopwatch|true            $profiler
      */
     public function __construct(
-        null|array|CacheItemPoolInterface $adapter,
-        ?string                           $prefix = null,
-        protected ?int                    $expiration = null,
-        protected bool                    $deferCommit = false,
-        private ?LoggerInterface          $logger = null,
-        private readonly ?Stopwatch       $stopwatch = null,
+        null|array|CacheItemPoolInterface     $adapter,
+        ?string                               $prefix = null,
+        protected ?int                        $expiration = null,
+        protected bool                        $deferCommit = false,
+        private ?LoggerInterface              $logger = null,
+        null|true|Stopwatch|ProfilerInterface $profiler = null,
     ) {
         $adapter ??= [];
 
@@ -61,6 +64,10 @@ final class CacheHandler implements LoggerAwareInterface
         else {
             $this->cacheKeyPrefix = null;
         }
+
+        $this->profiler = $profiler instanceof ProfilerInterface
+                ? $profiler
+                : new Profiler( $profiler, $this->cacheKeyPrefix ?? 'cache' );
     }
 
     /**
@@ -87,7 +94,7 @@ final class CacheHandler implements LoggerAwareInterface
 
         $key = $this->resolveCacheItemKey( $key );
 
-        $profiler = $this->profileCacheEvent( "get.{$key}", true );
+        $this->profiler->start( "get.{$key}" );
 
         $inMemory = $this->cacheAdapter === null;
 
@@ -114,7 +121,7 @@ final class CacheHandler implements LoggerAwareInterface
             $this->set( $key, $value, $expiration, $defer );
         }
 
-        $profiler?->stop();
+        $this->profiler->stop( "get.{$key}" );
         return $value;
     }
 
@@ -152,7 +159,7 @@ final class CacheHandler implements LoggerAwareInterface
 
         $key = $this->resolveCacheItemKey( $key );
 
-        $profile = $this->profileCacheEvent( "set.{$key}", true );
+        $this->profiler->start( "set.{$key}" );
 
         if ( $this->cacheAdapter === null ) {
             $this->inMemory[$key] = $value;
@@ -169,14 +176,14 @@ final class CacheHandler implements LoggerAwareInterface
             }
             else {
                 $this->cacheAdapter->save( $item );
-                $profile?->lap();
+                $this->profiler->lap( "set.{$key}" );
             }
         }
         catch ( Throwable $exception ) {
             $this->handleCacheException( __METHOD__, $key, $exception );
         }
 
-        $profile?->stop();
+        $this->profiler->stop( "set.{$key}" );
     }
 
     public function delete( string $key ) : void
@@ -292,29 +299,6 @@ final class CacheHandler implements LoggerAwareInterface
         }
 
         return $this->cacheKeyPrefix.$key;
-    }
-
-    protected function profileCacheEvent(
-        string $name,
-        bool   $keepAlive = false,
-    ) : ?StopwatchEvent {
-        if ( ! $this->stopwatch ) {
-            return null;
-        }
-
-        $name = str_start( \trim( $name, ' .' ), "cache.{$this->cacheKeyPrefix}" );
-
-        $event = $this->stopwatch->isStarted( $name )
-                ? $this->stopwatch->getEvent( $name )
-                : $this->stopwatch->start( $name, 'Cache' );
-
-        if ( $keepAlive ) {
-            return $event;
-        }
-
-        $event->stop();
-
-        return null;
     }
 
     /**

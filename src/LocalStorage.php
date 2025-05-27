@@ -265,8 +265,6 @@ class LocalStorage extends CacheAdapter
             return false;
         }
 
-        $this->profiler->start( "commit.{$this->name}" );
-
         $dataExport      = $this->exportData();
         $storageDataHash = \hash( algo : 'xxh32', data : $dataExport );
 
@@ -310,9 +308,6 @@ class LocalStorage extends CacheAdapter
                 $this->log( $exception );
                 return false;
             }
-            finally {
-                $this->profiler->stop( "commit.{$this->name}" );
-            }
         }
 
         return true;
@@ -338,8 +333,6 @@ class LocalStorage extends CacheAdapter
      */
     protected function exportData() : string
     {
-        $this->profiler->start( "export.{$this->name}" );
-
         foreach ( $this->loadStorage()->data as $key => $item ) {
             if ( $item instanceof Item ) {
                 $item = [
@@ -360,8 +353,6 @@ class LocalStorage extends CacheAdapter
             }
 
             $this->data[$key] = $item;
-
-            $this->profiler->lap( "export.{$this->name}" );
         }
 
         try {
@@ -369,9 +360,6 @@ class LocalStorage extends CacheAdapter
         }
         catch ( Throwable $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
-        }
-        finally {
-            $this->profiler->stop( "export.{$this->name}" );
         }
 
         return $data;
@@ -401,8 +389,6 @@ class LocalStorage extends CacheAdapter
             return $this;
         }
 
-        $this->profiler->start( "load.{$this->name}" );
-
         if ( ! \file_exists( $this->filePath ) ) {
             $this->data = [];
             $this->hash = 'initial';
@@ -414,9 +400,6 @@ class LocalStorage extends CacheAdapter
         }
         catch ( Throwable $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
-        }
-        finally {
-            $this->profiler->stop( "load.{$this->name}" );
         }
 
         return $this;
