@@ -265,7 +265,7 @@ class LocalStorage extends CacheAdapter
             return false;
         }
 
-        $profiler = $this->profile( "commit.{$this->name}" );
+        $this->profiler->start( "commit.{$this->name}" );
 
         $dataExport      = $this->exportData();
         $storageDataHash = \hash( algo : 'xxh32', data : $dataExport );
@@ -276,43 +276,45 @@ class LocalStorage extends CacheAdapter
                 ['class' => $this::class, 'name' => $this->name],
                 'debug',
             );
-            return false;
+        }
+        else {
+            $dateTime = datetime();
+
+            $timestamp          = $dateTime->getTimestamp();
+            $formattedTimestamp = $dateTime->format( 'Y-m-d H:i:s e' );
+
+            $localStorage = <<<PHP
+                <?php
+                
+                /*------------------------------------------------------%{$timestamp}%-
+                
+                   Name      : {$this->name}
+                   Generated : {$formattedTimestamp}
+                   Generator : {$this->generator}
+                
+                   Do not edit it manually.
+                
+                -#{$storageDataHash}#------------------------------------------------*/
+                
+                return ['{$storageDataHash}', {$dataExport}];
+                PHP;
+
+            try {
+                ( new Filesystem() )->dumpFile( $this->filePath, $localStorage.PHP_EOL );
+                $this->log(
+                    '{class} {name} Changes committed.',
+                    ['class' => $this::class, 'name' => $this->name, 'path' => $this->filePath],
+                );
+            }
+            catch ( Throwable $exception ) {
+                $this->log( $exception );
+                return false;
+            }
+            finally {
+                $this->profiler->stop( "commit.{$this->name}" );
+            }
         }
 
-        $dateTime = datetime();
-
-        $timestamp          = $dateTime->getTimestamp();
-        $formattedTimestamp = $dateTime->format( 'Y-m-d H:i:s e' );
-
-        $localStorage = <<<PHP
-            <?php
-            
-            /*------------------------------------------------------%{$timestamp}%-
-            
-               Name      : {$this->name}
-               Generated : {$formattedTimestamp}
-               Generator : {$this->generator}
-            
-               Do not edit it manually.
-            
-            -#{$storageDataHash}#------------------------------------------------*/
-            
-            return ['{$storageDataHash}', {$dataExport}];
-            PHP;
-
-        try {
-            ( new Filesystem() )->dumpFile( $this->filePath, $localStorage.PHP_EOL );
-            $this->log(
-                '{class} {name} Changes committed.',
-                ['class' => $this::class, 'name' => $this->name, 'path' => $this->filePath],
-            );
-        }
-        catch ( Throwable $exception ) {
-            $this->log( $exception );
-            return false;
-        }
-
-        $profiler?->stop();
         return true;
     }
 
@@ -336,7 +338,7 @@ class LocalStorage extends CacheAdapter
      */
     protected function exportData() : string
     {
-        $profiler = $this->profile( "export.{$this->name}" );
+        $this->profiler->start( "export.{$this->name}" );
 
         foreach ( $this->loadStorage()->data as $key => $item ) {
             if ( $item instanceof Item ) {
@@ -359,7 +361,7 @@ class LocalStorage extends CacheAdapter
 
             $this->data[$key] = $item;
 
-            $profiler?->lap();
+            $this->profiler->lap( "export.{$this->name}" );
         }
 
         try {
@@ -368,8 +370,9 @@ class LocalStorage extends CacheAdapter
         catch ( Throwable $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
         }
-
-        $profiler?->stop();
+        finally {
+            $this->profiler->stop( "export.{$this->name}" );
+        }
 
         return $data;
     }
@@ -398,7 +401,7 @@ class LocalStorage extends CacheAdapter
             return $this;
         }
 
-        $profiler = $this->profile( "load.{$this->name}" );
+        $this->profiler->start( "load.{$this->name}" );
 
         if ( ! \file_exists( $this->filePath ) ) {
             $this->data = [];
@@ -412,8 +415,9 @@ class LocalStorage extends CacheAdapter
         catch ( Throwable $e ) {
             throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
         }
-
-        $profiler?->stop();
+        finally {
+            $this->profiler->stop( "load.{$this->name}" );
+        }
 
         return $this;
     }

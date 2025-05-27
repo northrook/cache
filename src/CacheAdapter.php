@@ -4,17 +4,14 @@ declare(strict_types=1);
 
 namespace Cache;
 
-use Psr\Log\LoggerInterface;
+use Core\Autowire\{Logger, Profiler};
+use Psr\Log\{LoggerAwareInterface, LoggerInterface};
 use Psr\Cache\CacheItemPoolInterface;
-use Core\Interface\{LogHandler, Loggable};
-use Symfony\Component\Stopwatch\{Stopwatch, StopwatchEvent};
-use function Support\{class_basename, str_start};
+use function Support\{class_basename};
 
-abstract class CacheAdapter implements CacheItemPoolInterface, Loggable
+abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterface
 {
-    use LogHandler;
-
-    private ?Stopwatch $stopwatch = null;
+    use Logger, Profiler;
 
     protected readonly string $name;
 
@@ -26,19 +23,5 @@ abstract class CacheAdapter implements CacheItemPoolInterface, Loggable
     final public function setLogger( LoggerInterface $logger ) : void
     {
         $this->logger ??= $logger;
-    }
-
-    final public function setStopwatch( Stopwatch $stopwatch ) : void
-    {
-        $this->stopwatch ??= $stopwatch;
-    }
-
-    final protected function profile( string $name, ?string $category = 'Cache' ) : ?StopwatchEvent
-    {
-        if ( ! $this->stopwatch ) {
-            return null;
-        }
-        $name = str_start( \trim( $name, ' .' ), 'cache.' );
-        return $this->stopwatch->start( $name, $category );
     }
 }
