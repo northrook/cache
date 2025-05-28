@@ -7,7 +7,6 @@ namespace Cache;
 use Core\Autowire\Logger;
 use Psr\Log\{LoggerAwareInterface, LoggerInterface};
 use Psr\Cache\CacheItemPoolInterface;
-use function Support\{class_basename};
 
 abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterface
 {
@@ -17,7 +16,13 @@ abstract class CacheAdapter implements CacheItemPoolInterface, LoggerAwareInterf
 
     final protected function setName( ?string $name = null ) : void
     {
-        $this->name = $name ?? class_basename( $this::class, 'ucfirst' );
+        if ( ! $name ) {
+            $namespaced = \explode( '\\', $this::class );
+
+            $name = \end( $namespaced ) ?: 'CacheAdapter';
+        }
+
+        $this->name = $name;
     }
 
     final public function setLogger( LoggerInterface $logger ) : void

@@ -28,6 +28,11 @@ final class Item implements CacheItemInterface
         protected int|false $expiry = false,
     ) {}
 
+    /**
+     * @internal
+     *
+     * @param LocalStorage $storagePool
+     */
     public function setPool( LocalStorage $storagePool ) : void
     {
         $this->storagePool ??= $storagePool;
@@ -64,11 +69,19 @@ final class Item implements CacheItemInterface
         return $this;
     }
 
+    /**
+     * @internal
+     * @return false|int
+     */
     public function expiry() : int|false
     {
         return $this->expiry;
     }
 
+    /**
+     * @internal
+     * @return bool
+     */
     public function expired() : bool
     {
         return $this->expiry && ( $this->expiry < \time() );
