@@ -266,7 +266,7 @@ class LocalStorage extends CacheAdapter
         }
 
         $dataExport      = $this->exportData();
-        $storageDataHash = \hash( algo : 'xxh32', data : $dataExport );
+        $storageDataHash = \hash( algo : 'xxh64', data : $dataExport );
 
         if ( $this->validate && $storageDataHash === ( $this->hash ?? null ) ) {
             $this->log(
@@ -415,8 +415,8 @@ class LocalStorage extends CacheAdapter
         $key = (string) $value;
 
         \assert(
-            \ctype_alnum( \str_replace( ['.', '-'], '', $key ) ),
-            $this::class." keys must only contain ASCII characters, underscores and dashes. '".$value."' provided.",
+            \ctype_alnum( \str_replace( ['.', '-', ':'], '', $key ) ),
+            $this::class." keys must only contain ASCII characters, periods, and hyphens. '".$value."' provided.",
         );
 
         return \strtolower( $key );
