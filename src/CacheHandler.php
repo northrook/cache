@@ -32,7 +32,7 @@ final class CacheHandler implements LoggerAwareInterface
      * @param null|int                                         $expiration
      * @param bool                                             $deferCommit
      * @param ?LoggerInterface                                 $logger
-     * @param null|ProfilerInterface|Stopwatch|true            $profiler
+     * @param null|bool|ProfilerInterface|Stopwatch            $profiler
      */
     public function __construct(
         null|array|CacheItemPoolInterface     $adapter,
@@ -40,7 +40,7 @@ final class CacheHandler implements LoggerAwareInterface
         protected ?int                        $expiration = null,
         protected bool                        $deferCommit = false,
         private ?LoggerInterface              $logger = null,
-        null|true|Stopwatch|ProfilerInterface $profiler = null,
+        null|bool|Stopwatch|ProfilerInterface $profiler = null,
     ) {
         $adapter ??= [];
 
@@ -65,9 +65,10 @@ final class CacheHandler implements LoggerAwareInterface
             $this->cacheKeyPrefix = null;
         }
 
-        $this->profiler = $profiler instanceof ProfilerInterface
-                ? $profiler
-                : new Profiler( $profiler, $this->cacheKeyPrefix ?? 'cache' );
+        $this->profiler = Profiler::from(
+            profiler : $profiler,
+            category : $this->cacheKeyPrefix ?? 'CacheHandler',
+        );
     }
 
     /**
