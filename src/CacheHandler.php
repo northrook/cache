@@ -11,7 +11,7 @@ use Cache\Exception\{InvalidCacheKeyException, RuntimeCacheException};
 use LogicException;
 use Psr\Cache\{CacheItemInterface, CacheItemPoolInterface};
 use Psr\Log\{LoggerAwareInterface, LoggerInterface};
-use Symfony\Component\Stopwatch\{Stopwatch};
+use Symfony\Component\Stopwatch\Stopwatch;
 use Throwable;
 
 final class CacheHandler implements LoggerAwareInterface

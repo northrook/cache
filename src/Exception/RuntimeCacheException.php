@@ -2,7 +2,7 @@
 
 namespace Cache\Exception;
 
+use Core\Exception\RuntimeException;
 use Psr\Cache\CacheException;
-use RuntimeException;
 
 final class RuntimeCacheException extends RuntimeException implements CacheException {}
