@@ -18,15 +18,12 @@
   "prefer-stable": true,
   "require": {
     "php": ">=8.3",
-    "psr/cache": "^3.0",
-    "symfony/var-exporter": "@stable",
     "northrook/core": "dev-main",
-    "northrook/profiler": "dev-main"
+    "northrook/profiler": "dev-main",
+    "symfony/var-exporter": "^7.3"
   },
   "require-dev": {
-    "northrook/dev": "dev-main",
-    "symfony/stopwatch": "@stable",
-    "symfony/cache": "^7.2"
+    "northrook/dev": "dev-main"
   },
   "scripts": {
     "phpstan": "vendor/bin/phpstan analyse src"

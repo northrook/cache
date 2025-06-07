@@ -4,31 +4,34 @@ declare(strict_types=1);
 
 namespace Cache;
 
-use Core\Exception\ErrorException;
-use Core\Interface\ProfilerInterface;
-use Core\Profiler;
-use Cache\Exception\{InvalidCacheKeyException, RuntimeCacheException};
-use LogicException;
 use Psr\Cache\{CacheItemInterface, CacheItemPoolInterface};
 use Psr\Log\{LoggerAwareInterface, LoggerInterface};
+use Core\Profiler;
+use Core\Interface\ProfilerInterface;
 use Symfony\Component\Stopwatch\Stopwatch;
+use Core\Exception\ErrorException;
+use Cache\Exception\{
+    InvalidCacheKeyException,
+    RuntimeCacheException
+};
+use LogicException;
 use Throwable;
 
 final class CacheHandler implements LoggerAwareInterface
 {
-    private readonly ?string $cacheKeyPrefix;
-
-    /** @var ?CacheItemPoolInterface */
     private readonly ?CacheItemPoolInterface $cacheAdapter;
 
     private readonly ProfilerInterface $profiler;
+
+    /** @var null|non-empty-string */
+    private ?string $cacheKeyPrefix;
 
     /** @var array<string, mixed> */
     protected array $inMemory;
 
     /**
      * @param null|array<string, mixed>|CacheItemPoolInterface $adapter
-     * @param null|string                                      $prefix
+     * @param null|non-empty-string                            $prefix
      * @param null|int                                         $expiration
      * @param bool                                             $deferCommit
      * @param ?LoggerInterface                                 $logger
@@ -53,22 +56,36 @@ final class CacheHandler implements LoggerAwareInterface
             $this->inMemory     = $adapter;
         }
 
-        if ( $prefix ) {
-            \assert(
-                \ctype_alnum( \str_replace( ['.', '-'], '', $prefix ) ),
-                "Cache '\$prefix' must only contain ASCII characters, hyphens, and periods. '".$prefix."' provided.",
-            );
-
-            $this->cacheKeyPrefix = \trim( $prefix, '-.' ).'.';
-        }
-        else {
-            $this->cacheKeyPrefix = null;
-        }
+        $this->setPrefix( $prefix );
 
         $this->profiler = Profiler::from(
             profiler : $profiler,
-            category : $this->cacheKeyPrefix ?? 'CacheHandler',
+            category : $this->cacheKeyPrefix ?? 'Cache',
         );
+    }
+
+    /**
+     * @param null|array<string, mixed>|CacheHandler|CacheItemPoolInterface $cache
+     * @param null|non-empty-string                                         $prefix
+     * @param null|int                                                      $expiration
+     * @param bool                                                          $deferCommit
+     *
+     * @return CacheHandler
+     */
+    public static function from(
+        null|array|CacheHandler|CacheItemPoolInterface $cache,
+        ?string                                        $prefix = null,
+        ?int                                           $expiration = null,
+        ?bool                                          $deferCommit = null,
+    ) : CacheHandler {
+        if ( $cache instanceof self ) {
+            $cache->setPrefix( $prefix );
+            $cache->expiration( $expiration );
+            $cache->deferCommit( $deferCommit );
+            return $cache;
+        }
+
+        return new CacheHandler( $cache, $prefix, $expiration, $deferCommit ?? false );
     }
 
     /**
@@ -268,24 +285,22 @@ final class CacheHandler implements LoggerAwareInterface
         return $this->deferCommit;
     }
 
-    public function expiration() : ?int
+    public function expiration( null|int|string $set = null ) : ?int
     {
-        return $this->expiration;
-    }
-
-    public function setExpiration(
-        null|int|string $expiration,
-        bool            $silenceError = false,
-    ) : void {
-        if ( \is_string( $expiration ) ) {
-            $expiration = \strtotime( $expiration ) ?: null;
-
-            if ( $silenceError === false ) {
-                ErrorException::check();
-            }
+        if ( $set === null ) {
+            return $this->expiration;
         }
 
-        $this->expiration = $expiration;
+        if ( \is_string( $set ) ) {
+            $this->expiration = \strtotime( $set ) ?: null;
+        }
+        else {
+            $this->expiration = $set;
+        }
+
+        ErrorException::check();
+
+        return $this->expiration;
     }
 
     public function setLogger( ?LoggerInterface $logger ) : void
@@ -293,7 +308,22 @@ final class CacheHandler implements LoggerAwareInterface
         $this->logger = $logger;
     }
 
-    private function resolveCacheItemKey( string $key ) : string
+    protected function setPrefix( ?string $string ) : void
+    {
+        if ( $string ) {
+            \assert(
+                \ctype_alnum( \str_replace( ['.', '-'], '', $string ) ),
+                "Cache '\$prefix' must only contain ASCII characters, hyphens, and periods. '".$string."' provided.",
+            );
+
+            $this->cacheKeyPrefix = \trim( $string, '-.' ).'.';
+        }
+        else {
+            $this->cacheKeyPrefix = null;
+        }
+    }
+
+    protected function resolveCacheItemKey( string $key ) : string
     {
         if ( ! $this->cacheKeyPrefix || \str_starts_with( $key, $this->cacheKeyPrefix ) ) {
             return $key;
@@ -331,9 +361,8 @@ final class CacheHandler implements LoggerAwareInterface
 
         // Throw as a last resort
         throw new RuntimeCacheException(
-            "{$caller}: {$key}. ".$exception->getMessage(),
-            $exception->getCode(),
-            $exception,
+            message  : "{$caller}: {$key}. ".$exception->getMessage(),
+            previous : $exception,
         );
     }
 }

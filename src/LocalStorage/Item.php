@@ -6,7 +6,10 @@ namespace Cache\LocalStorage;
 
 use Cache\LocalStorage;
 use Psr\Cache\CacheItemInterface;
-use DateInterval, DateTimeImmutable, InvalidArgumentException, DateTimeInterface;
+use DateInterval,
+DateTimeImmutable,
+InvalidArgumentException,
+DateTimeInterface;
 
 /**
  * @internal

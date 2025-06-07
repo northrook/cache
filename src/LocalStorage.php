@@ -6,10 +6,10 @@ namespace Cache;
 
 use Cache\LocalStorage\Item;
 use Psr\Cache\CacheItemInterface;
+use Symfony\Component\VarExporter\Exception\ExceptionInterface;
 use Symfony\Component\VarExporter\VarExporter;
-use Symfony\Component\Filesystem\Filesystem;
-use Stringable, Throwable, InvalidArgumentException;
-use function Support\datetime;
+use Stringable, Throwable, InvalidArgumentException, RuntimeException;
+use function Support\{datetime, file_save};
 
 /**
  * File cache designed for high-performance data persistence.
@@ -26,7 +26,7 @@ use function Support\datetime;
  */
 class LocalStorage extends CacheAdapter
 {
-    /** @var array<string, array{'value':mixed,'expiry': false|int}|Item> */
+    /** @var array<string, array<mixed|string>|Item> */
     private array $data;
 
     private ?string $hash;
@@ -118,8 +118,9 @@ class LocalStorage extends CacheAdapter
         $data = $this->loadItemData( $key );
 
         if ( ! $data instanceof Item ) {
-            $value  = $data['value'];
-            $expiry = $data['expiry'];
+            $value = $data['value'];
+            /** @var false|int $expiry */
+            $expiry = $data['expiry'] ?? false;
 
             $data = new Item( $key, $value, $hit, $expiry );
             $data->setPool( $this );
@@ -227,9 +228,11 @@ class LocalStorage extends CacheAdapter
 
     public function saveDeferred( CacheItemInterface $item ) : bool
     {
-        if ( ! $item instanceof Item ) {
-            throw new InvalidArgumentException( 'Only '.Item::class.' instances are supported.' );
-        }
+        \assert(
+            $item instanceof Item,
+            'Only '.Item::class.' instances are supported.',
+        );
+
         $item->setPool( $this );
         $this->loadStorage()->data[$item->getKey()] = $item;
 
@@ -274,40 +277,60 @@ class LocalStorage extends CacheAdapter
                 ['class' => $this::class, 'name' => $this->name],
                 'debug',
             );
+            // return true;
+        }
+        $dateTime = datetime();
+
+        $timestamp          = $dateTime->getTimestamp();
+        $formattedTimestamp = $dateTime->format( 'Y-m-d H:i:s e' );
+
+        if ( \str_contains( $dataExport, '\\Symfony\\Component\\VarExporter\\Internal\\' ) ) {
+            $dataExport = \str_replace(
+                '\\Symfony\\Component\\VarExporter\\Internal\\',
+                'Internal\\',
+                $dataExport,
+            );
+            $uses = NEWLINE.'use Symfony\\Component\\VarExporter\\Internal;'.NEWLINE;
         }
         else {
-            $dateTime = datetime();
+            $uses = null;
+        }
 
-            $timestamp          = $dateTime->getTimestamp();
-            $formattedTimestamp = $dateTime->format( 'Y-m-d H:i:s e' );
+        $localStorage = <<<PHP
+            <?php
+            
+            /*------------------------------------------------------%{$timestamp}%-
+            
+               Name      : {$this->name}
+               Generated : {$formattedTimestamp}
+               Generator : {$this->generator}
+            
+               Do not edit it manually.
+            
+            -#{$storageDataHash}#------------------------------------------------*/
+            {$uses}
+            return [
+                '{$storageDataHash}',
+            PHP;
 
-            $localStorage = <<<PHP
-                <?php
-                
-                /*------------------------------------------------------%{$timestamp}%-
-                
-                   Name      : {$this->name}
-                   Generated : {$formattedTimestamp}
-                   Generator : {$this->generator}
-                
-                   Do not edit it manually.
-                
-                -#{$storageDataHash}#------------------------------------------------*/
-                
-                return ['{$storageDataHash}', {$dataExport}];
-                PHP;
+        $localStorage .= NEWLINE;
 
-            try {
-                ( new Filesystem() )->dumpFile( $this->filePath, $localStorage.PHP_EOL );
-                $this->log(
-                    '{class} {name} Changes committed.',
-                    ['class' => $this::class, 'name' => $this->name, 'path' => $this->filePath],
-                );
-            }
-            catch ( Throwable $exception ) {
-                $this->log( $exception );
-                return false;
-            }
+        foreach ( \explode( NEWLINE, $dataExport ) as $line ) {
+            $localStorage .= "\t{$line}".NEWLINE;
+        }
+
+        $localStorage .= '];';
+
+        try {
+            file_save( $this->filePath, $localStorage.NEWLINE );
+            $this->log(
+                '{class} {name} Changes committed.',
+                ['class' => $this::class, 'name' => $this->name, 'path' => $this->filePath],
+            );
+        }
+        catch ( Throwable $exception ) {
+            $this->log( $exception );
+            return false;
         }
 
         return true;
@@ -334,14 +357,16 @@ class LocalStorage extends CacheAdapter
     protected function exportData() : string
     {
         foreach ( $this->loadStorage()->data as $key => $item ) {
-            if ( $item instanceof Item ) {
-                $item = [
-                    'value'  => $item->get(),
-                    'expiry' => $item->expiry(),
-                ];
+            $data = $item instanceof Item
+                    ? [
+                        'value'  => $item->get(),
+                        'expiry' => $item->expiry(),
+                    ] : $item;
+            if ( ! isset( $data['expiry'] ) ) {
+                $data['expiry'] = $this->defaultExpiry;
             }
 
-            if ( $item['expiry'] > \time() ) {
+            if ( $data['expiry'] && $data['expiry'] < \time() ) {
                 $this->log(
                     '{class} {name} item {key} has expired. ',
                     ['class' => $this::class, 'name' => $this->name, 'key' => $key],
@@ -352,17 +377,22 @@ class LocalStorage extends CacheAdapter
                 continue;
             }
 
-            $this->data[$key] = $item;
+            if ( ! $data['expiry'] ) {
+                unset( $data['expiry'] );
+            }
+
+            $this->data[$key] = $data;
         }
 
         try {
-            $data = VarExporter::export( $this->data );
+            return VarExporter::export( $this->data );
         }
-        catch ( Throwable $e ) {
-            throw new InvalidArgumentException( $e->getMessage(), $e->getCode(), $e );
+        catch ( ExceptionInterface $exception ) {
+            throw new RuntimeException(
+                message  : $exception->getMessage(),
+                previous : $exception,
+            );
         }
-
-        return $data;
     }
 
     // .. Internal
@@ -370,7 +400,7 @@ class LocalStorage extends CacheAdapter
     /**
      * @param string $key
      *
-     * @return array{'value':mixed,'expiry': false|int}|Item
+     * @return array<string,mixed>|Item
      */
     final protected function loadItemData( string $key ) : Item|array
     {
