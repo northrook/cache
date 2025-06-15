@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cache;
 
-use Core\Autowire\Logger;
+use Core\Contracts\Autowire\Logger;
 use Psr\Cache\CacheItemPoolInterface;
 
 abstract class CacheAdapter implements CacheItemPoolInterface

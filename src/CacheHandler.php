@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Cache;
 
 use Psr\Cache\{CacheItemInterface, CacheItemPoolInterface};
+use Core\Contracts\ProfilerInterface;
 use Psr\Log\{LoggerAwareInterface, LoggerInterface};
-use Core\Profiler;
-use Core\Interface\ProfilerInterface;
-use Symfony\Component\Stopwatch\Stopwatch;
 use Core\Exception\ErrorException;
 use Cache\Exception\{
     InvalidCacheKeyException,
@@ -20,8 +18,6 @@ use Throwable;
 final class CacheHandler implements LoggerAwareInterface
 {
     private readonly ?CacheItemPoolInterface $cacheAdapter;
-
-    private readonly ProfilerInterface $profiler;
 
     /** @var null|non-empty-string */
     private ?string $cacheKeyPrefix;
@@ -35,15 +31,15 @@ final class CacheHandler implements LoggerAwareInterface
      * @param null|int                                         $expiration
      * @param bool                                             $deferCommit
      * @param ?LoggerInterface                                 $logger
-     * @param null|bool|ProfilerInterface|Stopwatch            $profiler
+     * @param ?ProfilerInterface                               $profiler
      */
     public function __construct(
-        null|array|CacheItemPoolInterface     $adapter,
-        ?string                               $prefix = null,
-        protected ?int                        $expiration = null,
-        protected bool                        $deferCommit = false,
-        private ?LoggerInterface              $logger = null,
-        null|bool|Stopwatch|ProfilerInterface $profiler = null,
+        null|array|CacheItemPoolInterface   $adapter,
+        ?string                             $prefix = null,
+        protected ?int                      $expiration = null,
+        protected bool                      $deferCommit = false,
+        private ?LoggerInterface            $logger = null,
+        private readonly ?ProfilerInterface $profiler = null,
     ) {
         $adapter ??= [];
 
@@ -57,10 +53,13 @@ final class CacheHandler implements LoggerAwareInterface
         }
 
         $this->setPrefix( $prefix );
-
-        $this->profiler = Profiler::from(
-            profiler : $profiler,
-            category : $this->cacheKeyPrefix ?? 'Cache',
+        $this->profiler->setCategory(
+            $this->cacheKeyPrefix
+                ?? (
+                    $this->inMemory
+                        ? $this::class.'->inMemory'
+                        : $this->cacheAdapter::class
+                ),
         );
     }
 
@@ -194,7 +193,7 @@ final class CacheHandler implements LoggerAwareInterface
             }
             else {
                 $this->cacheAdapter->save( $item );
-                $this->profiler->lap( "set.{$key}" );
+                // $this->profiler->snapshot( "set.{$key}" );
             }
         }
         catch ( Throwable $exception ) {

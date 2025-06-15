@@ -127,7 +127,7 @@ class LocalStorage extends CacheAdapter
         }
 
         if ( $data->expired() ) {
-            $this->log(
+            $this->logger->warning(
                 '{class} {name} item {key} has expired. ',
                 ['class' => $this::class, 'name' => $this->name, 'key' => $key],
             );
@@ -252,14 +252,13 @@ class LocalStorage extends CacheAdapter
     {
         if ( $force ) {
             $this->hasChanges = true;
-            $this->log(
+            $this->logger->warning(
                 '{class} {name} has been forced to commit {items} items.',
                 [
                     'class' => $this::class,
                     'name'  => $this->name,
                     'items' => \count( $this->data ?? [] ),
                 ],
-                'warning',
             );
         }
 
@@ -272,10 +271,9 @@ class LocalStorage extends CacheAdapter
         $storageDataHash = \hash( algo : 'xxh64', data : $dataExport );
 
         if ( $this->validate && $storageDataHash === ( $this->hash ?? null ) ) {
-            $this->log(
+            $this->logger->debug(
                 '{class} {name} Matches hashes, no changes to commit.',
                 ['class' => $this::class, 'name' => $this->name],
-                'debug',
             );
             // return true;
         }
@@ -323,13 +321,13 @@ class LocalStorage extends CacheAdapter
 
         try {
             file_save( $this->filePath, $localStorage.NEWLINE );
-            $this->log(
+            $this->logger->warning(
                 '{class} {name} Changes committed.',
                 ['class' => $this::class, 'name' => $this->name, 'path' => $this->filePath],
             );
         }
         catch ( Throwable $exception ) {
-            $this->log( $exception );
+            $this->logException( $exception, continue : true );
             return false;
         }
 
@@ -367,7 +365,7 @@ class LocalStorage extends CacheAdapter
             }
 
             if ( $data['expiry'] && $data['expiry'] < \time() ) {
-                $this->log(
+                $this->logger->warning(
                     '{class} {name} item {key} has expired. ',
                     ['class' => $this::class, 'name' => $this->name, 'key' => $key],
                 );
